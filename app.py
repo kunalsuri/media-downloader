@@ -3,23 +3,18 @@ app.py – Main Streamlit application for the media-downloader.
 
 Run with:
     streamlit run app.py
+    — or double-click launch.bat on Windows.
 
-Features
---------
-* Dark-themed, polished UI with custom CSS
-* YouTube URL input with real-time validation
-* Format selection: MP4 (video) or MP3 (audio)
-* Quality selection via expandable settings panel
-* Thumbnail preview and video metadata display
-* Live progress bar + status messages during download
-* Secure, in-browser file download button for the result
-* Clear error feedback for all failure modes
+Architecture
+------------
+* Sidebar  : format (MP4/MP3), quality, ffmpeg status, about
+* Main     : hero, URL input, fetch/download actions, video card, progress
+* Backend  : downloader.YoutubeDownloader cached in st.session_state
 """
 
 from __future__ import annotations
 
 import html
-import time
 from pathlib import Path
 
 import streamlit as st
@@ -28,141 +23,294 @@ from downloader import YoutubeDownloader, validate_url
 from downloader.utils import format_filesize
 
 # ---------------------------------------------------------------------------
-# Page configuration (must be the very first Streamlit call)
+# Page configuration  (must be the very first Streamlit call)
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="Media Downloader",
     page_icon="⬇️",
     layout="centered",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
-# Custom CSS – dark, modern aesthetic
+# Custom CSS  — modern dark design system
 # ---------------------------------------------------------------------------
 CUSTOM_CSS = """
 <style>
-/* ── Global ──────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ── Base ─────────────────────────────────────────────────────── */
 html, body, [data-testid="stAppViewContainer"] {
-    background-color: #0e1117;
-    color: #e0e0e0;
-    font-family: 'Inter', 'Segoe UI', sans-serif;
+    font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #0d1117;
+    color: #c9d1d9;
 }
 
-/* ── Header ──────────────────────────────────────────────────── */
-.app-header {
-    text-align: center;
-    padding: 2rem 0 1rem;
+/* ── Sidebar shell ────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: linear-gradient(170deg, #0d1117 0%, #131920 55%, #0d1117 100%);
+    border-right: 1px solid rgba(255, 75, 110, 0.14);
 }
-.app-header h1 {
+[data-testid="stSidebar"] > div:first-child { padding-top: 0; }
+
+/* Sidebar brand block */
+.sidebar-brand {
+    padding: 1.8rem 1rem 1.4rem;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 0.25rem;
+}
+.sidebar-brand .brand-icon {
     font-size: 2.6rem;
+    line-height: 1;
+    display: block;
+    margin-bottom: 0.55rem;
+    filter: drop-shadow(0 0 18px rgba(255, 75, 110, 0.45));
+}
+.sidebar-brand h1 {
+    font-size: 1.2rem;
     font-weight: 700;
     background: linear-gradient(135deg, #ff4b6e, #ff8c42);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    margin-bottom: 0.2rem;
+    background-clip: text;
+    margin: 0 0 0.2rem;
+    letter-spacing: -0.01em;
 }
-.app-header p {
-    color: #8a8d93;
-    font-size: 1rem;
-    margin-top: 0;
-}
-
-/* ── Card ─────────────────────────────────────────────────────── */
-.card {
-    background: #1a1d26;
-    border: 1px solid #2c2f3e;
-    border-radius: 12px;
-    padding: 1.5rem 2rem;
-    margin-bottom: 1.2rem;
+.sidebar-brand p {
+    font-size: 0.7rem;
+    color: #5b6370;
+    margin: 0;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 
-/* ── Format buttons ──────────────────────────────────────────── */
-div[data-testid="stHorizontalBlock"] .format-btn button {
-    border-radius: 8px !important;
-    border: 2px solid #2c2f3e !important;
-    background: #1a1d26 !important;
-    color: #e0e0e0 !important;
-    font-weight: 600 !important;
-    transition: all 0.2s ease !important;
-}
-div[data-testid="stHorizontalBlock"] .format-btn button:hover {
-    border-color: #ff4b6e !important;
-    color: #ff4b6e !important;
+/* Sidebar section label */
+.section-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: #5b6370;
+    margin: 0 0 0.55rem;
+    padding: 0;
 }
 
-/* ── Primary action button ───────────────────────────────────── */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #ff4b6e, #ff8c42) !important;
-    color: white !important;
-    font-weight: 700 !important;
-    font-size: 1rem !important;
-    border: none !important;
-    border-radius: 10px !important;
-    padding: 0.6rem 2rem !important;
-    transition: opacity 0.2s ease !important;
-    width: 100%;
+/* Status badges (ffmpeg indicator) */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.7rem;
+    border-radius: 100px;
+    font-size: 0.73rem;
+    font-weight: 500;
+    line-height: 1.4;
 }
-.stButton > button[kind="primary"]:hover {
-    opacity: 0.88 !important;
+.badge-ok {
+    background: rgba(63, 185, 80, 0.1);
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, 0.28);
+}
+.badge-warn {
+    background: rgba(210, 153, 34, 0.1);
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, 0.28);
 }
 
-/* ── Input field ─────────────────────────────────────────────── */
+/* ── Hero ─────────────────────────────────────────────────────── */
+.hero {
+    text-align: center;
+    padding: 2.2rem 0 1.8rem;
+}
+.hero h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #ff4b6e 0%, #ff8c42 55%, #fbbf24 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0 0 0.45rem;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+.hero p {
+    color: #6b7280;
+    font-size: 0.93rem;
+    margin: 0;
+}
+
+/* ── URL input ────────────────────────────────────────────────── */
 .stTextInput > div > div > input {
-    background-color: #1a1d26 !important;
-    border: 1px solid #2c2f3e !important;
-    border-radius: 8px !important;
-    color: #e0e0e0 !important;
-    font-size: 0.95rem !important;
+    background-color: #161b27 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px !important;
+    color: #e6edf3 !important;
+    font-size: 0.94rem !important;
+    padding: 0.7rem 1rem !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 .stTextInput > div > div > input:focus {
     border-color: #ff4b6e !important;
-    box-shadow: 0 0 0 2px rgba(255, 75, 110, 0.25) !important;
+    box-shadow: 0 0 0 3px rgba(255, 75, 110, 0.14) !important;
+    outline: none !important;
+}
+.stTextInput > div > div > input::placeholder { color: #3d444d !important; }
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+.stButton > button {
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+    transition: all 0.18s ease !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: rgba(22, 27, 39, 0.8) !important;
+    color: #c9d1d9 !important;
+}
+.stButton > button:hover {
+    border-color: #ff4b6e !important;
+    color: #ff4b6e !important;
+    background: rgba(255, 75, 110, 0.06) !important;
+    transform: translateY(-1px) !important;
+}
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #ff4b6e, #ff8c42) !important;
+    border: none !important;
+    color: #fff !important;
+}
+.stButton > button[kind="primary"]:hover {
+    box-shadow: 0 4px 18px rgba(255, 75, 110, 0.38) !important;
+    transform: translateY(-1px) !important;
+    color: #fff !important;
 }
 
-/* ── Radio buttons ───────────────────────────────────────────── */
-.stRadio > div { gap: 0.8rem; }
-.stRadio label { font-size: 0.95rem !important; }
+/* Download save button — distinct green */
+.stDownloadButton > button {
+    background: linear-gradient(135deg, #238636, #2ea043) !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+    font-size: 0.92rem !important;
+    border: none !important;
+    border-radius: 12px !important;
+    width: 100% !important;
+    padding: 0.7rem 1.5rem !important;
+    transition: all 0.18s ease !important;
+    letter-spacing: 0.01em !important;
+}
+.stDownloadButton > button:hover {
+    box-shadow: 0 4px 18px rgba(46, 160, 67, 0.38) !important;
+    transform: translateY(-1px) !important;
+}
 
-/* ── Progress bar ────────────────────────────────────────────── */
+/* ── Video info card ──────────────────────────────────────────── */
+.video-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(22, 27, 39, 0.95), rgba(13, 17, 23, 0.9));
+    border: 1px solid rgba(255, 75, 110, 0.2);
+    border-radius: 16px;
+    padding: 1.4rem 1.5rem;
+    margin: 1.4rem 0;
+    overflow: hidden;
+}
+/* Gradient accent line at top of card */
+.video-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #ff4b6e, #ff8c42, transparent);
+    border-radius: 16px 16px 0 0;
+}
+.video-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #e6edf3;
+    line-height: 1.55;
+    margin: 0.4rem 0 1.1rem;
+}
+
+/* ── Metrics ──────────────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    border-radius: 10px !important;
+    padding: 0.6rem 0.75rem !important;
+}
+[data-testid="stMetricLabel"] p {
+    font-size: 0.65rem !important;
+    font-weight: 600 !important;
+    color: #5b6370 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+}
+[data-testid="stMetricValue"] {
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+    color: #c9d1d9 !important;
+}
+/* Hide delta arrow — no deltas in this app */
+[data-testid="stMetricDelta"] { display: none !important; }
+
+/* ── Progress bar ─────────────────────────────────────────────── */
 .stProgress > div > div > div {
     background: linear-gradient(90deg, #ff4b6e, #ff8c42) !important;
+    border-radius: 100px !important;
+    transition: width 0.3s ease !important;
 }
 
-/* ── Expander ────────────────────────────────────────────────── */
+/* ── Status widget (download progress container) ──────────────── */
+[data-testid="stStatusWidget"] {
+    border-radius: 12px !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ── Expander ─────────────────────────────────────────────────── */
 .streamlit-expanderHeader {
-    background-color: #1a1d26 !important;
+    background-color: rgba(22, 27, 39, 0.5) !important;
     border-radius: 8px !important;
-    color: #8a8d93 !important;
-    font-size: 0.9rem !important;
+    font-size: 0.86rem !important;
+    color: #7d8590 !important;
 }
 
-/* ── Info / success / error messages ────────────────────────── */
-.stAlert {
-    border-radius: 8px !important;
+/* ── Alerts ───────────────────────────────────────────────────── */
+.stAlert { border-radius: 10px !important; }
+
+/* ── Radio (sidebar format selector) ─────────────────────────── */
+.stRadio > div { gap: 0.4rem !important; }
+.stRadio label {
+    background: rgba(255, 255, 255, 0.025) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 10px !important;
+    padding: 0.5rem 0.75rem !important;
+    transition: all 0.18s ease !important;
+    font-size: 0.86rem !important;
+    cursor: pointer !important;
+    width: 100% !important;
+}
+.stRadio label:hover {
+    border-color: rgba(255, 75, 110, 0.45) !important;
+    background: rgba(255, 75, 110, 0.06) !important;
 }
 
-/* ── Metadata row ────────────────────────────────────────────── */
-.meta-row {
-    display: flex;
-    gap: 1.2rem;
-    flex-wrap: wrap;
-    margin-top: 0.6rem;
-}
-.meta-chip {
-    background: #22263a;
-    border-radius: 20px;
-    padding: 0.25rem 0.75rem;
-    font-size: 0.8rem;
-    color: #8a8d93;
+/* ── Select / slider ──────────────────────────────────────────── */
+.stSelectbox > div > div {
+    background: rgba(22, 27, 39, 0.8) !important;
+    border-radius: 10px !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-/* ── Footer ──────────────────────────────────────────────────── */
+/* ── Divider ──────────────────────────────────────────────────── */
+hr { border-color: rgba(255, 255, 255, 0.06) !important; }
+
+/* ── Footer ───────────────────────────────────────────────────── */
 .footer {
     text-align: center;
-    color: #3e4250;
-    font-size: 0.78rem;
-    padding: 2rem 0 1rem;
+    color: #3d444d;
+    font-size: 0.73rem;
+    padding: 2.5rem 0 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 2rem;
+    line-height: 1.8;
 }
 </style>
 """
@@ -172,122 +320,173 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-# FIX: Use absolute path anchored to this file's directory, not the process
-# working directory, so downloads always land in the right place regardless of
-# how or where Streamlit is launched.
 DOWNLOADS_DIR = Path(__file__).parent / "downloads"
 QUALITY_OPTIONS = ["best", "1080p", "720p", "480p", "360p"]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _fmt_views(n: int) -> str:
+    """Format view counts compactly: 1_400_000 → '1.4M'."""
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.1f}B"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(n)
+
 
 # ---------------------------------------------------------------------------
 # Session-state initialisation
 # ---------------------------------------------------------------------------
 def _init_state() -> None:
     defaults: dict = {
-        "format_choice": "MP4 📹",
-        "quality": "best",
         "video_info": None,
         "last_url": "",
         "download_result": None,
-        # FIX: Store the output file Path, not the raw bytes, to avoid keeping
-        # potentially gigabytes of data in session state between reruns.
         "download_filepath": None,
         "download_filename": None,
     }
-    for key, default in defaults.items():
+    for key, val in defaults.items():
         if key not in st.session_state:
-            st.session_state[key] = default
+            st.session_state[key] = val
 
-    # FIX: Cache the downloader instance in session state so shutil.which()
-    # (PATH scan for ffmpeg) is called only once per browser session rather
-    # than on every button click.
+    # Cache the downloader so shutil.which("ffmpeg") runs only once per session.
     if "downloader" not in st.session_state:
         st.session_state.downloader = YoutubeDownloader(output_dir=DOWNLOADS_DIR)
 
 
 _init_state()
 
-# ---------------------------------------------------------------------------
-# Header
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# SIDEBAR
+# ===========================================================================
+with st.sidebar:
+
+    # ── Brand ────────────────────────────────────────────────────────────
+    st.markdown(
+        """
+        <div class="sidebar-brand">
+            <span class="brand-icon">⬇️</span>
+            <h1>Media Downloader</h1>
+            <p>YouTube · MP4 &amp; MP3</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── Format ───────────────────────────────────────────────────────────
+    st.markdown('<p class="section-label">Output Format</p>', unsafe_allow_html=True)
+    fmt = st.radio(
+        "format",
+        options=["📹  MP4 — Video", "🎵  MP3 — Audio only"],
+        index=0,
+        key="format_radio",
+        label_visibility="collapsed",
+    )
+    is_mp3 = "MP3" in fmt
+
+    st.divider()
+
+    # ── Quality ──────────────────────────────────────────────────────────
+    st.markdown('<p class="section-label">Video Quality</p>', unsafe_allow_html=True)
+    if is_mp3:
+        st.caption("Fixed at 192 kbps for MP3 downloads.")
+        quality = "best"
+    else:
+        quality = st.selectbox(
+            "Quality",
+            options=QUALITY_OPTIONS,
+            index=0,
+            key="quality_select",
+            label_visibility="collapsed",
+            help="Higher qualities require ffmpeg. yt-dlp falls back automatically if unavailable.",
+        )
+
+    st.divider()
+
+    # ── System status ────────────────────────────────────────────────────
+    st.markdown('<p class="section-label">System</p>', unsafe_allow_html=True)
+    ffmpeg_ok = st.session_state.downloader.ffmpeg_available
+    if ffmpeg_ok:
+        st.markdown(
+            '<span class="badge badge-ok">✓&nbsp; ffmpeg ready</span>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<span class="badge badge-warn">⚠&nbsp; ffmpeg not found</span>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Install [ffmpeg](https://ffmpeg.org/download.html) for MP3 extraction "
+            "and quality-merged MP4 downloads."
+        )
+
+    st.divider()
+
+    # ── About ────────────────────────────────────────────────────────────
+    st.markdown('<p class="section-label">About</p>', unsafe_allow_html=True)
+    st.caption(
+        "Built with [Streamlit](https://streamlit.io) & "
+        "[yt-dlp](https://github.com/yt-dlp/yt-dlp)."
+    )
+    st.caption("⚖️ Personal use only — respect copyright laws.")
+    st.caption("Max download size: **2 GiB**.")
+
+# ===========================================================================
+# MAIN AREA
+# ===========================================================================
+
+# ── Hero ─────────────────────────────────────────────────────────────────
 st.markdown(
     """
-    <div class="app-header">
+    <div class="hero">
         <h1>⬇️ Media Downloader</h1>
-        <p>Download YouTube videos and audio in the highest quality — fast &amp; free.</p>
+        <p>Paste a YouTube URL, pick your format in the sidebar, then download.</p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------------------------
-# URL input
-# ---------------------------------------------------------------------------
+# ── URL input ─────────────────────────────────────────────────────────────
 url_input = st.text_input(
     label="YouTube URL",
-    placeholder="https://www.youtube.com/watch?v=…  or  https://youtu.be/…",
-    help="Paste any YouTube video, Shorts, or Music link.",
+    placeholder="https://www.youtube.com/watch?v=…   or   https://youtu.be/…",
+    help="Supports videos, Shorts, and YouTube Music links.",
     label_visibility="collapsed",
+    key="url_input",
 )
 
-# ---------------------------------------------------------------------------
-# Format selector (MP4 / MP3)
-# ---------------------------------------------------------------------------
-st.markdown("#### Choose Format")
-col_mp4, col_mp3, _ = st.columns([1, 1, 3])
-with col_mp4:
-    if st.button("📹 MP4 — Video", use_container_width=True, key="btn_mp4"):
-        st.session_state.format_choice = "MP4 📹"
-        st.session_state.download_result = None
-with col_mp3:
-    if st.button("🎵 MP3 — Audio", use_container_width=True, key="btn_mp3"):
-        st.session_state.format_choice = "MP3 🎵"
-        st.session_state.download_result = None
+# ── Reset state when URL changes ──────────────────────────────────────────
+if url_input != st.session_state.last_url and st.session_state.video_info is not None:
+    st.session_state.video_info = None
+    st.session_state.download_result = None
+    st.session_state.download_filepath = None
 
-# Show current selection badge
-_badge_color = "#ff4b6e" if "MP4" in st.session_state.format_choice else "#ff8c42"
-st.markdown(
-    f'<p style="margin:0.2rem 0 0.8rem; color:{_badge_color}; font-weight:600;">'
-    f"Selected: {st.session_state.format_choice}</p>",
-    unsafe_allow_html=True,
-)
-
-# ---------------------------------------------------------------------------
-# Advanced settings (expandable)
-# ---------------------------------------------------------------------------
-with st.expander("⚙️ Advanced Settings", expanded=False):
-    st.session_state.quality = st.selectbox(
-        "Video Quality",
-        options=QUALITY_OPTIONS,
-        index=QUALITY_OPTIONS.index(st.session_state.quality),
-        disabled="MP3" in st.session_state.format_choice,
-        help="Quality selector is only active for MP4 downloads.",
+# ── Action buttons ────────────────────────────────────────────────────────
+col_fetch, col_dl = st.columns(2)
+with col_fetch:
+    fetch_clicked = st.button(
+        "🔍  Fetch Info",
+        use_container_width=True,
+        key="btn_fetch",
     )
-    st.caption(
-        "ℹ️ Higher qualities require ffmpeg to be installed on the server. "
-        "If a format is unavailable, yt-dlp will automatically fall back to the next best option."
-    )
-
-# ---------------------------------------------------------------------------
-# Fetch metadata button
-# ---------------------------------------------------------------------------
-st.markdown("---")
-
-fetch_col, dl_col = st.columns([1, 1])
-
-with fetch_col:
-    fetch_clicked = st.button("🔍 Fetch Info", use_container_width=True)
-
-with dl_col:
+with col_dl:
     download_clicked = st.button(
-        "⬇️ Download",
+        "⬇️  Download",
         type="primary",
         use_container_width=True,
-        disabled=st.session_state.video_info is None,
+        disabled=(
+            st.session_state.video_info is None
+            or url_input != st.session_state.last_url
+        ),
+        key="btn_download",
     )
 
-# ---------------------------------------------------------------------------
-# Fetch video info
-# ---------------------------------------------------------------------------
+# ── Fetch video info ──────────────────────────────────────────────────────
 if fetch_clicked:
     is_valid, error_msg = validate_url(url_input)
     if not is_valid:
@@ -306,134 +505,112 @@ if fetch_clicked:
                 st.error(f"🚫 {exc}")
                 st.session_state.video_info = None
 
-# Reset info when URL changes
-if url_input != st.session_state.last_url and st.session_state.video_info is not None:
-    st.session_state.video_info = None
-    st.session_state.download_result = None
-    st.session_state.download_filepath = None
-
-# ---------------------------------------------------------------------------
-# Video metadata card
-# ---------------------------------------------------------------------------
+# ── Video info card ───────────────────────────────────────────────────────
 if st.session_state.video_info is not None:
     info = st.session_state.video_info
 
-    st.markdown(
-        '<div class="card">',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="video-card">', unsafe_allow_html=True)
 
     thumb_col, meta_col = st.columns([1, 2])
     with thumb_col:
         if info.thumbnail_url:
             st.image(info.thumbnail_url, use_container_width=True)
     with meta_col:
-        # FIX: Render the title as bold HTML so html.escape() fully prevents
-        # both XSS and markdown injection from adversarial video titles.
-        st.markdown(f"<b>{html.escape(info.title)}</b>", unsafe_allow_html=True)
-        # FIX: Escape all user-controlled fields before injecting them into
-        # the unsafe_allow_html block to prevent stored XSS.  view_count is
-        # cast to int earlier so no escaping needed there.
+        # Title — escaped to prevent HTML injection
         st.markdown(
-            f'<div class="meta-row">'
-            f'<span class="meta-chip">👤 {html.escape(info.uploader)}</span>'
-            f'<span class="meta-chip">⏱ {html.escape(info.duration_str)}</span>'
-            f'<span class="meta-chip">👁 {info.view_count:,} views</span>'
-            f"</div>",
+            f'<p class="video-title">{html.escape(info.title)}</p>',
             unsafe_allow_html=True,
         )
+
+        # Stats row
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Duration", info.duration_str)
+        c2.metric("Views", _fmt_views(info.view_count))
+        # Truncate long channel names so the metric doesn't overflow
+        uploader_display = info.uploader
+        if len(uploader_display) > 20:
+            uploader_display = uploader_display[:19] + "…"
+        c3.metric("Channel", uploader_display)
+
         if info.description:
-            with st.expander("📄 Description", expanded=False):
-                st.write(info.description[:800] + ("…" if len(info.description) > 800 else ""))
+            with st.expander("📄 Description"):
+                st.write(
+                    info.description[:800]
+                    + ("…" if len(info.description) > 800 else "")
+                )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Download
-# ---------------------------------------------------------------------------
+# ── Download ──────────────────────────────────────────────────────────────
 if download_clicked and st.session_state.video_info is not None:
-    # FIX: Remove the redundant validate_url() call here.  The Download button
-    # is only enabled once video_info is populated, which itself requires a
-    # successful Fetch Info → validate_url pass.  Re-validating is wasted work
-    # and creates a confusing double-error path if the URL somehow changed.
-    mode = "mp3" if "MP3" in st.session_state.format_choice else "mp4"
-    quality = st.session_state.quality
+    mode = "mp3" if is_mp3 else "mp4"
+    fmt_label = "MP3 · 192 kbps" if is_mp3 else f"MP4 · {quality}"
 
-    progress_bar = st.progress(0, text="Starting download…")
+    with st.status(f"⬇️  Downloading as {fmt_label}…", expanded=True) as dl_status:
 
-    def _progress_hook(d: dict) -> None:
-        """Update Streamlit progress bar from yt-dlp hook data."""
-        if d.get("status") == "downloading":
-            downloaded = d.get("downloaded_bytes") or 0
-            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-            speed = d.get("speed")
-            eta = d.get("eta")
+        progress_bar = st.progress(0, text="Connecting…")
 
-            pct = int((downloaded / total) * 100) if total > 0 else 0
-            pct = min(pct, 99)  # hold at 99 until post-processing done
+        def _progress_hook(d: dict) -> None:
+            """Feed yt-dlp progress data into the Streamlit progress bar."""
+            if d.get("status") == "downloading":
+                downloaded = d.get("downloaded_bytes") or 0
+                total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+                speed = d.get("speed")
+                eta = d.get("eta")
 
-            speed_str = (
-                format_filesize(int(speed)) + "/s" if speed else "calculating…"
-            )
-            eta_str = f"{eta}s" if eta is not None else "calculating…"
+                pct = min(int((downloaded / total) * 100) if total > 0 else 0, 99)
+                speed_str = (format_filesize(int(speed)) + "/s") if speed else "…"
+                eta_str = f"{eta}s" if eta is not None else "…"
 
-            progress_bar.progress(
-                pct,
-                text=f"Downloading… {pct}% | Speed: {speed_str} | ETA: {eta_str}",
-            )
-        elif d.get("status") == "finished":
-            progress_bar.progress(99, text="Processing / converting…")
+                progress_bar.progress(
+                    pct,
+                    text=f"{pct}%  ·  {speed_str}  ·  ETA {eta_str}",
+                )
+            elif d.get("status") == "finished":
+                progress_bar.progress(99, text="Post-processing…")
 
-    result = st.session_state.downloader.download(
-        url=url_input,
-        mode=mode,
-        quality=quality,
-        progress_callback=_progress_hook,
-    )
-
-    if result.success and result.file_path and result.file_path.exists():
-        progress_bar.progress(100, text="✅ Download complete!")
-        st.success(
-            f"✅ **{result.file_path.name}** — "
-            f"{format_filesize(result.file_size_bytes)}"
+        result = st.session_state.downloader.download(
+            url=url_input,
+            mode=mode,
+            quality=quality,
+            progress_callback=_progress_hook,
         )
-        st.session_state.download_result = result
-        # FIX: Store only the file path (not the raw bytes) to avoid keeping
-        # the entire downloaded file in session state memory.  The file bytes
-        # are read on demand when the download button is rendered below.
-        st.session_state.download_filepath = result.file_path
-        st.session_state.download_filename = result.file_path.name
-    else:
-        progress_bar.empty()
-        st.error(f"🚫 {result.error_message}")
-        st.session_state.download_result = None
 
-# ---------------------------------------------------------------------------
-# In-browser download button (persists across reruns)
-# ---------------------------------------------------------------------------
+        if result.success and result.file_path and result.file_path.exists():
+            progress_bar.progress(100, text="Done!")
+            dl_status.update(
+                label=f"✅  Ready — {result.file_path.name}  ({format_filesize(result.file_size_bytes)})",
+                state="complete",
+                expanded=False,
+            )
+            st.session_state.download_result = result
+            st.session_state.download_filepath = result.file_path
+            st.session_state.download_filename = result.file_path.name
+        else:
+            dl_status.update(label="❌  Download failed", state="error")
+            st.error(f"🚫 {result.error_message}")
+            st.session_state.download_result = None
+
+# ── Save-to-disk button (persists across reruns) ──────────────────────────
 if (
     st.session_state.download_filepath is not None
     and st.session_state.download_filename is not None
     and st.session_state.download_filepath.exists()
 ):
+    st.divider()
     file_ext = Path(st.session_state.download_filename).suffix.lower()
     mime = "audio/mpeg" if file_ext == ".mp3" else "video/mp4"
 
-    # FIX: Open the file as a binary stream rather than pre-loading all bytes
-    # into a variable.  Streamlit reads the stream when building the response,
-    # so this avoids duplicating a potentially large file in memory.
     with open(st.session_state.download_filepath, "rb") as fh:
         st.download_button(
-            label=f"💾 Save {st.session_state.download_filename}",
+            label=f"💾  Save  {st.session_state.download_filename}",
             data=fh,
             file_name=st.session_state.download_filename,
             mime=mime,
             use_container_width=True,
         )
 
-# ---------------------------------------------------------------------------
-# Footer
-# ---------------------------------------------------------------------------
+# ── Footer ────────────────────────────────────────────────────────────────
 st.markdown(
     """
     <div class="footer">
