@@ -18,7 +18,7 @@ Features
 
 from __future__ import annotations
 
-import io
+import html
 import time
 from pathlib import Path
 
@@ -172,25 +172,36 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-DOWNLOADS_DIR = Path("downloads")
+# FIX: Use absolute path anchored to this file's directory, not the process
+# working directory, so downloads always land in the right place regardless of
+# how or where Streamlit is launched.
+DOWNLOADS_DIR = Path(__file__).parent / "downloads"
 QUALITY_OPTIONS = ["best", "1080p", "720p", "480p", "360p"]
 
 # ---------------------------------------------------------------------------
 # Session-state initialisation
 # ---------------------------------------------------------------------------
 def _init_state() -> None:
-    defaults = {
+    defaults: dict = {
         "format_choice": "MP4 📹",
         "quality": "best",
         "video_info": None,
         "last_url": "",
         "download_result": None,
-        "download_bytes": None,
+        # FIX: Store the output file Path, not the raw bytes, to avoid keeping
+        # potentially gigabytes of data in session state between reruns.
+        "download_filepath": None,
         "download_filename": None,
     }
     for key, default in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = default
+
+    # FIX: Cache the downloader instance in session state so shutil.which()
+    # (PATH scan for ffmpeg) is called only once per browser session rather
+    # than on every button click.
+    if "downloader" not in st.session_state:
+        st.session_state.downloader = YoutubeDownloader(output_dir=DOWNLOADS_DIR)
 
 
 _init_state()
@@ -284,13 +295,12 @@ if fetch_clicked:
         st.session_state.video_info = None
     else:
         with st.spinner("Fetching video information…"):
-            downloader = YoutubeDownloader(output_dir=DOWNLOADS_DIR)
             try:
-                info = downloader.get_info(url_input)
+                info = st.session_state.downloader.get_info(url_input)
                 st.session_state.video_info = info
                 st.session_state.last_url = url_input
                 st.session_state.download_result = None
-                st.session_state.download_bytes = None
+                st.session_state.download_filepath = None
                 st.session_state.download_filename = None
             except ValueError as exc:
                 st.error(f"🚫 {exc}")
@@ -300,6 +310,7 @@ if fetch_clicked:
 if url_input != st.session_state.last_url and st.session_state.video_info is not None:
     st.session_state.video_info = None
     st.session_state.download_result = None
+    st.session_state.download_filepath = None
 
 # ---------------------------------------------------------------------------
 # Video metadata card
@@ -317,11 +328,16 @@ if st.session_state.video_info is not None:
         if info.thumbnail_url:
             st.image(info.thumbnail_url, use_container_width=True)
     with meta_col:
-        st.markdown(f"**{info.title}**")
+        # FIX: Render the title as bold HTML so html.escape() fully prevents
+        # both XSS and markdown injection from adversarial video titles.
+        st.markdown(f"<b>{html.escape(info.title)}</b>", unsafe_allow_html=True)
+        # FIX: Escape all user-controlled fields before injecting them into
+        # the unsafe_allow_html block to prevent stored XSS.  view_count is
+        # cast to int earlier so no escaping needed there.
         st.markdown(
             f'<div class="meta-row">'
-            f'<span class="meta-chip">👤 {info.uploader}</span>'
-            f'<span class="meta-chip">⏱ {info.duration_str}</span>'
+            f'<span class="meta-chip">👤 {html.escape(info.uploader)}</span>'
+            f'<span class="meta-chip">⏱ {html.escape(info.duration_str)}</span>'
             f'<span class="meta-chip">👁 {info.view_count:,} views</span>'
             f"</div>",
             unsafe_allow_html=True,
@@ -336,81 +352,84 @@ if st.session_state.video_info is not None:
 # Download
 # ---------------------------------------------------------------------------
 if download_clicked and st.session_state.video_info is not None:
-    is_valid, error_msg = validate_url(url_input)
-    if not is_valid:
-        st.error(f"🚫 {error_msg}")
-    else:
-        mode = "mp3" if "MP3" in st.session_state.format_choice else "mp4"
-        quality = st.session_state.quality
+    # FIX: Remove the redundant validate_url() call here.  The Download button
+    # is only enabled once video_info is populated, which itself requires a
+    # successful Fetch Info → validate_url pass.  Re-validating is wasted work
+    # and creates a confusing double-error path if the URL somehow changed.
+    mode = "mp3" if "MP3" in st.session_state.format_choice else "mp4"
+    quality = st.session_state.quality
 
-        progress_bar = st.progress(0, text="Starting download…")
-        status_text = st.empty()
+    progress_bar = st.progress(0, text="Starting download…")
 
-        def _progress_hook(d: dict) -> None:
-            """Update Streamlit progress bar from yt-dlp hook data."""
-            if d.get("status") == "downloading":
-                downloaded = d.get("downloaded_bytes") or 0
-                total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-                speed = d.get("speed")
-                eta = d.get("eta")
+    def _progress_hook(d: dict) -> None:
+        """Update Streamlit progress bar from yt-dlp hook data."""
+        if d.get("status") == "downloading":
+            downloaded = d.get("downloaded_bytes") or 0
+            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+            speed = d.get("speed")
+            eta = d.get("eta")
 
-                pct = int((downloaded / total) * 100) if total > 0 else 0
-                pct = min(pct, 99)  # hold at 99 until post-processing done
+            pct = int((downloaded / total) * 100) if total > 0 else 0
+            pct = min(pct, 99)  # hold at 99 until post-processing done
 
-                speed_str = (
-                    format_filesize(int(speed)) + "/s" if speed else "calculating…"
-                )
-                eta_str = f"{eta}s" if eta is not None else "calculating…"
-
-                progress_bar.progress(
-                    pct,
-                    text=f"Downloading… {pct}% | Speed: {speed_str} | ETA: {eta_str}",
-                )
-            elif d.get("status") == "finished":
-                progress_bar.progress(99, text="Processing / converting…")
-
-        downloader = YoutubeDownloader(output_dir=DOWNLOADS_DIR)
-        result = downloader.download(
-            url=url_input,
-            mode=mode,
-            quality=quality,
-            progress_callback=_progress_hook,
-        )
-
-        if result.success and result.file_path and result.file_path.exists():
-            progress_bar.progress(100, text="✅ Download complete!")
-            st.success(
-                f"✅ **{result.file_path.name}** — "
-                f"{format_filesize(result.file_size_bytes)}"
+            speed_str = (
+                format_filesize(int(speed)) + "/s" if speed else "calculating…"
             )
-            st.session_state.download_result = result
+            eta_str = f"{eta}s" if eta is not None else "calculating…"
 
-            # Read file into memory for the in-browser download button
-            file_bytes = result.file_path.read_bytes()
-            st.session_state.download_bytes = file_bytes
-            st.session_state.download_filename = result.file_path.name
-        else:
-            progress_bar.empty()
-            st.error(f"🚫 {result.error_message}")
-            st.session_state.download_result = None
+            progress_bar.progress(
+                pct,
+                text=f"Downloading… {pct}% | Speed: {speed_str} | ETA: {eta_str}",
+            )
+        elif d.get("status") == "finished":
+            progress_bar.progress(99, text="Processing / converting…")
+
+    result = st.session_state.downloader.download(
+        url=url_input,
+        mode=mode,
+        quality=quality,
+        progress_callback=_progress_hook,
+    )
+
+    if result.success and result.file_path and result.file_path.exists():
+        progress_bar.progress(100, text="✅ Download complete!")
+        st.success(
+            f"✅ **{result.file_path.name}** — "
+            f"{format_filesize(result.file_size_bytes)}"
+        )
+        st.session_state.download_result = result
+        # FIX: Store only the file path (not the raw bytes) to avoid keeping
+        # the entire downloaded file in session state memory.  The file bytes
+        # are read on demand when the download button is rendered below.
+        st.session_state.download_filepath = result.file_path
+        st.session_state.download_filename = result.file_path.name
+    else:
+        progress_bar.empty()
+        st.error(f"🚫 {result.error_message}")
+        st.session_state.download_result = None
 
 # ---------------------------------------------------------------------------
 # In-browser download button (persists across reruns)
 # ---------------------------------------------------------------------------
 if (
-    st.session_state.download_bytes is not None
+    st.session_state.download_filepath is not None
     and st.session_state.download_filename is not None
+    and st.session_state.download_filepath.exists()
 ):
     file_ext = Path(st.session_state.download_filename).suffix.lower()
     mime = "audio/mpeg" if file_ext == ".mp3" else "video/mp4"
 
-    st.download_button(
-        label=f"💾 Save {st.session_state.download_filename}",
-        data=st.session_state.download_bytes,
-        file_name=st.session_state.download_filename,
-        mime=mime,
-        use_container_width=True,
-    )
+    # FIX: Open the file as a binary stream rather than pre-loading all bytes
+    # into a variable.  Streamlit reads the stream when building the response,
+    # so this avoids duplicating a potentially large file in memory.
+    with open(st.session_state.download_filepath, "rb") as fh:
+        st.download_button(
+            label=f"💾 Save {st.session_state.download_filename}",
+            data=fh,
+            file_name=st.session_state.download_filename,
+            mime=mime,
+            use_container_width=True,
+        )
 
 # ---------------------------------------------------------------------------
 # Footer

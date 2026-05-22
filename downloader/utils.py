@@ -150,8 +150,13 @@ def format_filesize(size_bytes: int | None) -> str:
     """Return *size_bytes* as a human-readable string (e.g. ``"12.4 MB"``)."""
     if size_bytes is None or size_bytes < 0:
         return "Unknown size"
+    # FIX: Use a separate float variable instead of reassigning the typed
+    # parameter.  Dividing an int by 1024 produces a float in Python 3, so
+    # the original code silently mutated the type of size_bytes each iteration,
+    # requiring a '# type: ignore' suppression.
+    size: float = float(size_bytes)
     for unit in ("B", "KB", "MB", "GB", "TB"):
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024  # type: ignore[assignment]
-    return f"{size_bytes:.1f} PB"
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} PB"
