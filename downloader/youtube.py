@@ -25,6 +25,21 @@ import yt_dlp  # type: ignore[import]
 from .utils import build_output_path, sanitize_filename
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# FIX: Hard cap on download size (2 GiB) to prevent disk exhaustion and
+# avoid loading enormous files into memory.  Users who genuinely need larger
+# files can raise this constant or remove the limit.
+_MAX_FILESIZE_BYTES: int = 2 * 1024 * 1024 * 1024  # 2 GiB
+
+# FIX: Network socket timeout (seconds) for all yt-dlp operations.  Without
+# this, a slow or unresponsive server will hang the Streamlit process
+# indefinitely, making the entire app unresponsive.
+_SOCKET_TIMEOUT_SECONDS: int = 30
+
+
+# ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
 
@@ -93,6 +108,7 @@ _ERROR_HINTS: list[tuple[str, str]] = [
     ("HTTP Error 404", "The video was not found (HTTP 404). Please check the URL."),
     ("Unable to download", "Network error: unable to reach YouTube. Please check your connection."),
     ("No video formats found", "No downloadable formats were found for this video."),
+    ("Filesize exceeds", f"The file exceeds the maximum allowed size of 2 GiB."),
 ]
 
 
@@ -158,6 +174,9 @@ class YoutubeDownloader:
             "no_warnings": True,
             "skip_download": True,
             "noplaylist": True,
+            # FIX: Enforce a socket-level timeout so a slow/hung server
+            # cannot block the Streamlit process indefinitely.
+            "socket_timeout": _SOCKET_TIMEOUT_SECONDS,
         }
         if self._ffmpeg_path:
             opts["ffmpeg_location"] = self._ffmpeg_path
@@ -257,7 +276,10 @@ class YoutubeDownloader:
             final_path = build_output_path(self.output_dir, title, expected_ext)
             shutil.move(str(tmp_file), str(final_path))
 
-        file_size = final_path.stat().st_size if final_path.exists() else None
+        # FIX: Remove the redundant .exists() guard — shutil.move() above
+        # would have raised OSError if the move failed, so final_path is
+        # guaranteed to exist at this point.
+        file_size = final_path.stat().st_size
         return DownloadResult(
             success=True,
             file_path=final_path,
@@ -282,6 +304,13 @@ class YoutubeDownloader:
             "quiet": True,
             "no_warnings": True,
             "progress_hooks": [_make_progress_hook(progress_callback)],
+            # FIX: Enforce socket timeout to prevent indefinite hangs during
+            # the actual download (separate from the get_info timeout).
+            "socket_timeout": _SOCKET_TIMEOUT_SECONDS,
+            # FIX: Reject files larger than _MAX_FILESIZE_BYTES before
+            # downloading them, preventing disk exhaustion and the subsequent
+            # attempt to read the entire file into RAM.
+            "max_filesize": _MAX_FILESIZE_BYTES,
         }
 
         if self._ffmpeg_path:
@@ -328,14 +357,18 @@ class YoutubeDownloader:
         """
         Search *directory* for a file with *preferred_ext*, then any file.
         Returns ``None`` when the directory is empty.
+
+        FIX: Single-pass implementation — collects all files in one iteration,
+        preferring the exact extension match, falling back to the first file
+        found.  The original two-pass approach iterated the directory twice.
         """
         dir_path = Path(directory)
-        # Prefer exact extension match
+        fallback: Path | None = None
         for p in dir_path.iterdir():
+            if not p.is_file():
+                continue
             if p.suffix.lstrip(".").lower() == preferred_ext.lower():
-                return p
-        # Fall back to first file found
-        for p in dir_path.iterdir():
-            if p.is_file():
-                return p
-        return None
+                return p          # exact match — return immediately
+            if fallback is None:
+                fallback = p      # remember first non-matching file
+        return fallback
