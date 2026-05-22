@@ -1,6 +1,6 @@
 # ⬇️ Media Downloader
 
-> A modern, production-quality **YouTube media downloader** built with Streamlit and yt-dlp.
+> A modern, production-quality **YouTube and Instagram media downloader** built with Streamlit and yt-dlp.
 > Supports **macOS** (Apple Silicon & Intel), **Linux** (Ubuntu, Debian, Fedora, Arch), and **Windows 10/11**.
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python)
@@ -20,7 +20,8 @@
 | **MP4 video** | Best quality video + audio merged via ffmpeg |
 | **MP3 audio** | Audio-only extraction at 192 kbps |
 | **Quality selector** | best, 1080p, 720p, 480p, 360p |
-| **Video metadata** | Thumbnail, title, channel, duration, view count |
+| **Supported platforms** | YouTube (Videos, Shorts, Music) and Instagram (Reels, Posts, IGTV, Stories) |
+| **Video metadata** | Thumbnail, title, channel/author, duration, view count |
 | **Real-time progress** | Download speed & ETA inside a collapsible status panel |
 | **In-browser save** | One-click file download without exposing server paths |
 | **Modern sidebar UI** | Format, quality, and system status in a collapsible sidebar |
@@ -131,7 +132,7 @@ SKIP_BREW=1 ./setup_macos.sh       # Skip Homebrew/ffmpeg checks
 RECREATE_VENV=1 ./setup_macos.sh   # Rebuild virtual environment
 ```
 
-> `setup_and_run.sh` (legacy macOS script) still works identically.
+
 
 ---
 
@@ -194,7 +195,6 @@ media-downloader/
 ├── setup_macos.sh          # macOS one-command setup & launcher
 ├── setup_linux.sh          # Linux one-command setup & launcher
 ├── setup_windows.ps1       # Windows full setup (installs Python, git, ffmpeg)
-├── setup_and_run.sh        # Legacy macOS script (backward compat)
 ├── requirements.txt        # Python dependencies
 ├── .env.example            # Environment variable reference
 ├── README.md
@@ -203,8 +203,9 @@ media-downloader/
 │   └── config.toml         # Dark theme configuration
 ├── downloads/              # Downloaded media files (git-ignored, .gitkeep tracked)
 └── downloader/             # Core downloader package
-    ├── __init__.py         # Exports: YoutubeDownloader, validate_url, sanitize_filename
+    ├── __init__.py         # Exports: YoutubeDownloader, InstagramDownloader, validate_url, sanitize_filename, detect_platform
     ├── youtube.py          # YoutubeDownloader, VideoInfo, DownloadResult
+    ├── instagram.py        # InstagramDownloader (inherits YoutubeDownloader)
     └── utils.py            # URL validation, filename sanitisation, helpers
 ```
 
@@ -259,7 +260,7 @@ Server settings via environment variables:
 
 ## 🔭 Extending to Other Platforms
 
-`yt-dlp` supports 1000+ sites out of the box (Instagram, TikTok, Twitter/X, Vimeo, …).
+`yt-dlp` supports 1000+ sites out of the box (TikTok, Twitter/X, Vimeo, …).
 To add a new platform:
 
 1. Add URL-validation patterns to `_YOUTUBE_PATTERNS` in `downloader/utils.py`
