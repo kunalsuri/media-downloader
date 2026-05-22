@@ -34,11 +34,13 @@ _YOUTUBE_PATTERNS = [
 
 # Patterns that indicate a URL is likely a valid Instagram resource.
 # Covers: Posts (/p/), Reels (/reel/), IGTV (/tv/), Stories (/stories/).
+# The optional (?:[?#]\S*)? suffix accepts tracking/sharing query strings
+# such as ?igsh=… or ?utm_source=… that appear in links copied from Instagram.
 _INSTAGRAM_PATTERNS = [
-    r"(?:https?://)?(?:www\.)?instagram\.com/p/[\w-]+/?",
-    r"(?:https?://)?(?:www\.)?instagram\.com/reel/[\w-]+/?",
-    r"(?:https?://)?(?:www\.)?instagram\.com/tv/[\w-]+/?",
-    r"(?:https?://)?(?:www\.)?instagram\.com/stories/[\w.\-]+/\d+/?",
+    r"(?:https?://)?(?:www\.)?instagram\.com/p/[\w-]+/?(?:[?#]\S*)?",
+    r"(?:https?://)?(?:www\.)?instagram\.com/reel/[\w-]+/?(?:[?#]\S*)?",
+    r"(?:https?://)?(?:www\.)?instagram\.com/tv/[\w-]+/?(?:[?#]\S*)?",
+    r"(?:https?://)?(?:www\.)?instagram\.com/stories/[\w.\-]+/\d+/?(?:[?#]\S*)?",
 ]
 
 _COMPILED_YOUTUBE = [re.compile(p, re.IGNORECASE) for p in _YOUTUBE_PATTERNS]

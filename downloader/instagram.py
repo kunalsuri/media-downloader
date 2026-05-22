@@ -174,11 +174,22 @@ class InstagramDownloader(YoutubeDownloader):
         if info is None:
             raise ValueError("No information returned for this URL.")
 
-        # Flatten playlist/carousel — use the first concrete entry
+        # Flatten playlist/carousel — prefer the first entry that actually
+        # contains a video stream; fall back to a clear error when all entries
+        # are images (vcodec is None or "none").
         if info.get("_type") == "playlist":
             entries = [e for e in (info.get("entries") or []) if e]
             if entries:
-                info = entries[0]
+                video_entry = next(
+                    (e for e in entries if e.get("vcodec") not in (None, "none")),
+                    None,
+                )
+                if video_entry is None:
+                    raise ValueError(
+                        "No downloadable video found in this post"
+                        " — it may contain images only."
+                    )
+                info = video_entry
 
         return VideoInfo(
             title=(
@@ -262,10 +273,22 @@ class InstagramDownloader(YoutubeDownloader):
                     error_message="Download returned no data.",
                 )
 
-            # Resolve a usable title for the output filename
+            # Resolve a usable title for the output filename.
+            # Prefer the first carousel entry that has a video stream so the
+            # filename matches the actual downloaded media.
             if info.get("_type") == "playlist":
                 entries = [e for e in (info.get("entries") or []) if e]
-                title_info = entries[0] if entries else info
+                if entries:
+                    title_info = next(
+                        (
+                            e
+                            for e in entries
+                            if e.get("vcodec") not in (None, "none")
+                        ),
+                        entries[0],  # fall back to first entry if none is video
+                    )
+                else:
+                    title_info = info
             else:
                 title_info = info
 
