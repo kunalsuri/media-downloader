@@ -27,6 +27,22 @@ REM ============================================================================
 REM ── Always run from the folder containing this .bat file ─────────────────────
 cd /d "%~dp0"
 
+REM ── Validate required project files are present ──────────────────────────────
+if not exist "app.py" (
+    echo.
+    echo  [ERROR] app.py not found in the current directory.
+    echo          Please run launch.bat from inside the project folder.
+    echo.
+    goto :error
+)
+if not exist "requirements.txt" (
+    echo.
+    echo  [ERROR] requirements.txt not found in the current directory.
+    echo          Please run launch.bat from inside the project folder.
+    echo.
+    goto :error
+)
+
 REM ── Optional port override ───────────────────────────────────────────────────
 if "%STREAMLIT_PORT%"=="" set STREAMLIT_PORT=8501
 
@@ -94,7 +110,7 @@ set FIRST_RUN=0
 if not exist ".venv\Scripts\activate.bat" (
     echo  [SETUP] Creating virtual environment at .venv\ ...
     python -m venv --upgrade-deps .venv
-    if %errorlevel% neq 0 (
+    if !errorlevel! neq 0 (
         echo  [ERROR] Could not create the virtual environment.
         goto :error
     )
@@ -128,7 +144,7 @@ if "!FIRST_RUN!"=="1" (
     echo          (this may take 1-2 minutes on first run)
     echo.
     pip install --no-cache-dir -r requirements.txt
-    if %errorlevel% neq 0 (
+    if !errorlevel! neq 0 (
         echo.
         echo  [ERROR] Package installation failed.
         echo          Check your internet connection and try again.
@@ -139,7 +155,7 @@ if "!FIRST_RUN!"=="1" (
 ) else (
     REM Subsequent runs: quiet sync — only shows output if something changed
     pip install --quiet --no-cache-dir -r requirements.txt
-    if %errorlevel% neq 0 (
+    if !errorlevel! neq 0 (
         echo  [ERROR] Package verification failed.
         echo          Try: set RECREATE_VENV=1 and run launch.bat again.
         goto :error
