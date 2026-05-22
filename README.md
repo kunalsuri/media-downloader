@@ -33,6 +33,47 @@
 
 ## 🚀 Quick Start
 
+### Option A — One-command macOS setup (recommended)
+
+For **macOS** (Apple Silicon or Intel), a single script handles everything:
+Homebrew, ffmpeg, Python virtual environment, all dependencies, and app launch.
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/kunalsuri/media-downloader.git
+cd media-downloader
+
+# 2. Make the script executable (first time only)
+chmod +x setup_and_run.sh
+
+# 3. Run — setup + launch in one step
+./setup_and_run.sh
+```
+
+The script will:
+- ✅ Detect Apple Silicon vs Intel architecture
+- ✅ Install missing tools (Homebrew, ffmpeg) automatically
+- ✅ Create a Python virtual environment at `.venv/`
+- ✅ Install all dependencies from `requirements.txt`
+- ✅ Verify imports and open the app at **http://localhost:8501**
+
+**Advanced options** (pass as environment variables):
+
+| Variable | Default | Description |
+|---|---|---|
+| `STREAMLIT_PORT` | `8501` | Change the server port |
+| `SKIP_BREW` | `0` | Set to `1` to skip Homebrew/ffmpeg checks |
+| `RECREATE_VENV` | `0` | Set to `1` to rebuild the virtual environment from scratch |
+
+```bash
+# Example: run on port 8888 and skip Homebrew checks
+STREAMLIT_PORT=8888 SKIP_BREW=1 ./setup_and_run.sh
+```
+
+---
+
+### Option B — Manual setup (any OS)
+
 ### Prerequisites
 
 | Tool | Version | Install |
@@ -88,11 +129,13 @@ The app opens automatically at **http://localhost:8501**.
 ```
 media-downloader/
 ├── app.py                  # Streamlit UI entry point
+├── setup_and_run.sh        # macOS one-command setup & launcher script
 ├── requirements.txt        # Python dependencies
 ├── README.md
 ├── .gitignore
 ├── .streamlit/
 │   └── config.toml         # Dark-theme Streamlit configuration
+├── downloads/              # Downloaded media files (git-ignored, .gitkeep tracked)
 └── downloader/             # Core downloader package
     ├── __init__.py
     ├── youtube.py          # YoutubeDownloader class (yt-dlp wrapper)
