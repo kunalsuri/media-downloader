@@ -20,7 +20,7 @@
 | **MP4 video** | Best quality video + audio merged via ffmpeg |
 | **MP3 audio** | Audio-only extraction at 192 kbps |
 | **Quality selector** | best, 1080p, 720p, 480p, 360p |
-| **Supported platforms** | YouTube (Videos, Shorts, Music) and Instagram (Reels, Posts, Stories) |
+| **Supported platforms** | YouTube (Videos, Shorts, Music) and Instagram (Reels, Posts, IGTV, Stories) |
 | **Video metadata** | Thumbnail, title, channel/author, duration, view count |
 | **Real-time progress** | Download speed & ETA inside a collapsible status panel |
 | **In-browser save** | One-click file download without exposing server paths |
@@ -203,7 +203,7 @@ media-downloader/
 │   └── config.toml         # Dark theme configuration
 ├── downloads/              # Downloaded media files (git-ignored, .gitkeep tracked)
 └── downloader/             # Core downloader package
-    ├── __init__.py         # Exports: YoutubeDownloader, validate_url, sanitize_filename
+    ├── __init__.py         # Exports: YoutubeDownloader, InstagramDownloader, validate_url, sanitize_filename, detect_platform
     ├── youtube.py          # YoutubeDownloader, VideoInfo, DownloadResult
     ├── instagram.py        # InstagramDownloader (inherits YoutubeDownloader)
     └── utils.py            # URL validation, filename sanitisation, helpers
