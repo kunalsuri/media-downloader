@@ -105,7 +105,7 @@ function Invoke-WithRetry {
 Write-Banner
 
 # Confirm we are running on Windows.
-if (-not $IsWindows -and $PSVersionTable.PSVersion.Major -ge 6) {
+if ($PSVersionTable.PSVersion.Major -ge 6 -and -not $IsWindows) {
     Write-Err "This script is designed for Windows only."
     Write-Info "For macOS, run:  ./setup_macos.sh"
     Write-Info "For Linux, run:  ./setup_linux.sh"
