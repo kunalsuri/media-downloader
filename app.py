@@ -7,9 +7,11 @@ Run with:
 
 Architecture
 ------------
-* Sidebar  : format (MP4/MP3), quality, ffmpeg status, about
-* Main     : hero, URL input, fetch/download actions, video card, progress
-* Backend  : downloader.YoutubeDownloader cached in st.session_state
+* Sidebar  : format (MP4/MP3), quality (YouTube only), system status, about
+* Main     : hero, URL input, platform badge, fetch/download actions,
+             video/reel card, progress
+* Backend  : YoutubeDownloader and InstagramDownloader cached in
+             st.session_state; active downloader selected from the URL.
 """
 
 from __future__ import annotations
@@ -19,8 +21,12 @@ from pathlib import Path
 
 import streamlit as st
 
-from downloader import YoutubeDownloader, validate_url
-from downloader.utils import format_filesize
+from downloader import (
+    InstagramDownloader,
+    YoutubeDownloader,
+    validate_url,
+)
+from downloader.utils import detect_platform, format_filesize
 
 # ---------------------------------------------------------------------------
 # Page configuration  (must be the very first Streamlit call)
@@ -96,7 +102,7 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 0;
 }
 
-/* Status badges (ffmpeg indicator) */
+/* ── Badges ───────────────────────────────────────────────────── */
 .badge {
     display: inline-flex;
     align-items: center;
@@ -107,6 +113,8 @@ html, body, [data-testid="stAppViewContainer"] {
     font-weight: 500;
     line-height: 1.4;
 }
+
+/* System status */
 .badge-ok {
     background: rgba(63, 185, 80, 0.1);
     color: #3fb950;
@@ -116,6 +124,22 @@ html, body, [data-testid="stAppViewContainer"] {
     background: rgba(210, 153, 34, 0.1);
     color: #d29922;
     border: 1px solid rgba(210, 153, 34, 0.28);
+}
+
+/* Platform indicators */
+.badge-platform-yt {
+    background: rgba(255, 68, 68, 0.1);
+    color: #ff4444;
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.85rem;
+}
+.badge-platform-ig {
+    background: rgba(193, 53, 132, 0.12);
+    color: #e1306c;
+    border: 1px solid rgba(225, 48, 108, 0.32);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.85rem;
 }
 
 /* ── Hero ─────────────────────────────────────────────────────── */
@@ -202,7 +226,7 @@ html, body, [data-testid="stAppViewContainer"] {
     transform: translateY(-1px) !important;
 }
 
-/* ── Video info card ──────────────────────────────────────────── */
+/* ── Media info card ──────────────────────────────────────────── */
 .video-card {
     position: relative;
     background: linear-gradient(135deg, rgba(22, 27, 39, 0.95), rgba(13, 17, 23, 0.9));
@@ -220,6 +244,10 @@ html, body, [data-testid="stAppViewContainer"] {
     height: 2px;
     background: linear-gradient(90deg, #ff4b6e, #ff8c42, transparent);
     border-radius: 16px 16px 0 0;
+}
+/* Instagram card uses a purple-pink accent instead */
+.video-card.instagram-card::before {
+    background: linear-gradient(90deg, #833ab4, #e1306c, #fd1d1d, transparent);
 }
 .video-title {
     font-size: 1rem;
@@ -328,7 +356,7 @@ QUALITY_OPTIONS = ["best", "1080p", "720p", "480p", "360p"]
 # Helpers
 # ---------------------------------------------------------------------------
 def _fmt_views(n: int) -> str:
-    """Format view counts compactly: 1_400_000 → '1.4M'."""
+    """Format view/like counts compactly: 1_400_000 → '1.4M'."""
     if n >= 1_000_000_000:
         return f"{n / 1_000_000_000:.1f}B"
     if n >= 1_000_000:
@@ -348,17 +376,27 @@ def _init_state() -> None:
         "download_result": None,
         "download_filepath": None,
         "download_filename": None,
+        "platform": None,       # "youtube" | "instagram" | None
     }
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
 
-    # Cache the downloader so shutil.which("ffmpeg") runs only once per session.
-    if "downloader" not in st.session_state:
-        st.session_state.downloader = YoutubeDownloader(output_dir=DOWNLOADS_DIR)
+    # Cache each downloader so shutil.which("ffmpeg") runs only once per session.
+    if "yt_downloader" not in st.session_state:
+        st.session_state.yt_downloader = YoutubeDownloader(output_dir=DOWNLOADS_DIR)
+    if "ig_downloader" not in st.session_state:
+        st.session_state.ig_downloader = InstagramDownloader(output_dir=DOWNLOADS_DIR)
 
 
 _init_state()
+
+# ---------------------------------------------------------------------------
+# Platform detection — read the text-input key from session state so the
+# sidebar (which executes before the main-area widget call) can use it too.
+# ---------------------------------------------------------------------------
+_sidebar_url = st.session_state.get("url_input", "").strip()
+_sidebar_platform = detect_platform(_sidebar_url) if _sidebar_url else None
 
 # ===========================================================================
 # SIDEBAR
@@ -371,11 +409,25 @@ with st.sidebar:
         <div class="sidebar-brand">
             <span class="brand-icon">⬇️</span>
             <h1>Media Downloader</h1>
-            <p>YouTube · MP4 &amp; MP3</p>
+            <p>YouTube · Instagram · MP4 &amp; MP3</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    # ── Platform indicator ───────────────────────────────────────────────
+    if _sidebar_platform == "youtube":
+        st.markdown(
+            '<span class="badge badge-platform-yt">▶&nbsp; YouTube detected</span>',
+            unsafe_allow_html=True,
+        )
+        st.write("")  # spacing
+    elif _sidebar_platform == "instagram":
+        st.markdown(
+            '<span class="badge badge-platform-ig">📷&nbsp; Instagram detected</span>',
+            unsafe_allow_html=True,
+        )
+        st.write("")
 
     # ── Format ───────────────────────────────────────────────────────────
     st.markdown('<p class="section-label">Output Format</p>', unsafe_allow_html=True)
@@ -395,6 +447,10 @@ with st.sidebar:
     if is_mp3:
         st.caption("Fixed at 192 kbps for MP3 downloads.")
         quality = "best"
+    elif _sidebar_platform == "instagram":
+        # Instagram serves a single native-quality stream — no user choice
+        st.caption("Instagram serves its native quality automatically.")
+        quality = "best"
     else:
         quality = st.selectbox(
             "Quality",
@@ -409,7 +465,8 @@ with st.sidebar:
 
     # ── System status ────────────────────────────────────────────────────
     st.markdown('<p class="section-label">System</p>', unsafe_allow_html=True)
-    ffmpeg_ok = st.session_state.downloader.ffmpeg_available
+    # Both downloaders share the same ffmpeg detection — use the YT instance
+    ffmpeg_ok = st.session_state.yt_downloader.ffmpeg_available
     if ffmpeg_ok:
         st.markdown(
             '<span class="badge badge-ok">✓&nbsp; ffmpeg ready</span>',
@@ -433,6 +490,10 @@ with st.sidebar:
         "Built with [Streamlit](https://streamlit.io) & "
         "[yt-dlp](https://github.com/yt-dlp/yt-dlp)."
     )
+    st.caption(
+        "**Supported:** YouTube videos, Shorts, Music · "
+        "Instagram Reels, Posts, IGTV, Stories."
+    )
     st.caption("⚖️ Personal use only — respect copyright laws.")
     st.caption("Max download size: **2 GiB**.")
 
@@ -445,7 +506,7 @@ st.markdown(
     """
     <div class="hero">
         <h1>⬇️ Media Downloader</h1>
-        <p>Paste a YouTube URL, pick your format in the sidebar, then download.</p>
+        <p>Paste a YouTube or Instagram URL, pick your format, then download.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -453,18 +514,33 @@ st.markdown(
 
 # ── URL input ─────────────────────────────────────────────────────────────
 url_input = st.text_input(
-    label="YouTube URL",
-    placeholder="https://www.youtube.com/watch?v=…   or   https://youtu.be/…",
-    help="Supports videos, Shorts, and YouTube Music links.",
+    label="Media URL",
+    placeholder="YouTube or Instagram URL — Reel, Post, IGTV, video, Short…",
+    help=(
+        "YouTube: youtube.com/watch?v=…, youtu.be/…, Shorts, Music\n"
+        "Instagram: /reel/, /p/, /tv/, /stories/ — public content only"
+    ),
     label_visibility="collapsed",
     key="url_input",
 )
+
+# ── Platform detection (fresh, from the current input value) ──────────────
+platform = detect_platform(url_input.strip()) if url_input.strip() else None
 
 # ── Reset state when URL changes ──────────────────────────────────────────
 if url_input != st.session_state.last_url and st.session_state.video_info is not None:
     st.session_state.video_info = None
     st.session_state.download_result = None
     st.session_state.download_filepath = None
+    st.session_state.download_filename = None
+    st.session_state.platform = None
+
+# ── Active downloader — selected by detected platform ─────────────────────
+active_downloader = (
+    st.session_state.ig_downloader
+    if platform == "instagram"
+    else st.session_state.yt_downloader
+)
 
 # ── Action buttons ────────────────────────────────────────────────────────
 col_fetch, col_dl = st.columns(2)
@@ -486,18 +562,22 @@ with col_dl:
         key="btn_download",
     )
 
-# ── Fetch video info ──────────────────────────────────────────────────────
+# ── Fetch media info ──────────────────────────────────────────────────────
 if fetch_clicked:
     is_valid, error_msg = validate_url(url_input)
     if not is_valid:
         st.error(f"🚫 {error_msg}")
         st.session_state.video_info = None
     else:
-        with st.spinner("Fetching video information…"):
+        platform_label = (
+            "Instagram content" if platform == "instagram" else "video"
+        )
+        with st.spinner(f"Fetching {platform_label} information…"):
             try:
-                info = st.session_state.downloader.get_info(url_input)
+                info = active_downloader.get_info(url_input)
                 st.session_state.video_info = info
                 st.session_state.last_url = url_input
+                st.session_state.platform = platform
                 st.session_state.download_result = None
                 st.session_state.download_filepath = None
                 st.session_state.download_filename = None
@@ -505,16 +585,38 @@ if fetch_clicked:
                 st.error(f"🚫 {exc}")
                 st.session_state.video_info = None
 
-# ── Video info card ───────────────────────────────────────────────────────
+# ── Media info card ───────────────────────────────────────────────────────
 if st.session_state.video_info is not None:
     info = st.session_state.video_info
+    card_platform = st.session_state.platform
 
-    st.markdown('<div class="video-card">', unsafe_allow_html=True)
+    # Choose card style: Instagram uses a purple accent line
+    card_class = (
+        "video-card instagram-card"
+        if card_platform == "instagram"
+        else "video-card"
+    )
+    st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
 
+    # Platform badge + thumbnail
     thumb_col, meta_col = st.columns([1, 2])
     with thumb_col:
         if info.thumbnail_url:
             st.image(info.thumbnail_url, use_container_width=True)
+        # Platform badge under the thumbnail
+        if card_platform == "youtube":
+            st.markdown(
+                '<span class="badge badge-platform-yt" style="margin-top:0.5rem">'
+                "▶&nbsp; YouTube</span>",
+                unsafe_allow_html=True,
+            )
+        elif card_platform == "instagram":
+            st.markdown(
+                '<span class="badge badge-platform-ig" style="margin-top:0.5rem">'
+                "📷&nbsp; Instagram</span>",
+                unsafe_allow_html=True,
+            )
+
     with meta_col:
         # Title — escaped to prevent HTML injection
         st.markdown(
@@ -525,21 +627,32 @@ if st.session_state.video_info is not None:
         # Stats row
         c1, c2, c3 = st.columns(3)
         c1.metric("Duration", info.duration_str)
-        c2.metric("Views", _fmt_views(info.view_count))
-        # Truncate long channel names so the metric doesn't overflow
+        # Instagram shows Likes for image posts; Views for video posts
+        stats_label = (
+            "Views/Likes" if card_platform == "instagram" else "Views"
+        )
+        c2.metric(stats_label, _fmt_views(info.view_count))
         uploader_display = info.uploader
         if len(uploader_display) > 20:
             uploader_display = uploader_display[:19] + "…"
-        c3.metric("Channel", uploader_display)
+        c3.metric("Channel" if card_platform == "youtube" else "Creator", uploader_display)
 
         if info.description:
-            with st.expander("📄 Description"):
+            with st.expander("📄 Description / Caption"):
                 st.write(
                     info.description[:800]
                     + ("…" if len(info.description) > 800 else "")
                 )
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Instagram-specific hint ───────────────────────────────────────────
+    if card_platform == "instagram":
+        st.info(
+            "ℹ️ **Instagram note:** Only public posts can be downloaded. "
+            "Image-only posts have no video to extract.",
+            icon=None,
+        )
 
 # ── Download ──────────────────────────────────────────────────────────────
 if download_clicked and st.session_state.video_info is not None:
@@ -569,7 +682,7 @@ if download_clicked and st.session_state.video_info is not None:
             elif d.get("status") == "finished":
                 progress_bar.progress(99, text="Post-processing…")
 
-        result = st.session_state.downloader.download(
+        result = active_downloader.download(
             url=url_input,
             mode=mode,
             quality=quality,
@@ -579,7 +692,10 @@ if download_clicked and st.session_state.video_info is not None:
         if result.success and result.file_path and result.file_path.exists():
             progress_bar.progress(100, text="Done!")
             dl_status.update(
-                label=f"✅  Ready — {result.file_path.name}  ({format_filesize(result.file_size_bytes)})",
+                label=(
+                    f"✅  Ready — {result.file_path.name}"
+                    f"  ({format_filesize(result.file_size_bytes)})"
+                ),
                 state="complete",
                 expanded=False,
             )
@@ -615,7 +731,8 @@ st.markdown(
     """
     <div class="footer">
         Built with ❤️ using <strong>Streamlit</strong> &amp; <strong>yt-dlp</strong>
-        &nbsp;·&nbsp; For personal use only — respect copyright laws.
+        &nbsp;·&nbsp; YouTube &amp; Instagram &nbsp;·&nbsp;
+        For personal use only — respect copyright laws.
     </div>
     """,
     unsafe_allow_html=True,

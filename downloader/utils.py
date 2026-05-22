@@ -3,7 +3,8 @@ utils.py – shared helper functions for the media-downloader package.
 
 Responsibilities
 ----------------
-* URL validation (YouTube-specific patterns + generic HTTP check)
+* URL validation (YouTube + Instagram patterns + generic HTTP check)
+* Platform detection from a URL
 * Filename sanitisation to prevent path-traversal and filesystem errors
 * Human-readable file-size formatting
 * Determining a safe, unique output path (prevents duplicate overwrites)
@@ -31,12 +32,43 @@ _YOUTUBE_PATTERNS = [
     r"(?:https?://)?(?:music\.)?youtube\.com/watch\?.*v=[\w-]+",
 ]
 
+# Patterns that indicate a URL is likely a valid Instagram resource.
+# Covers: Posts (/p/), Reels (/reel/), IGTV (/tv/), Stories (/stories/).
+_INSTAGRAM_PATTERNS = [
+    r"(?:https?://)?(?:www\.)?instagram\.com/p/[\w-]+/?",
+    r"(?:https?://)?(?:www\.)?instagram\.com/reel/[\w-]+/?",
+    r"(?:https?://)?(?:www\.)?instagram\.com/tv/[\w-]+/?",
+    r"(?:https?://)?(?:www\.)?instagram\.com/stories/[\w.\-]+/\d+/?",
+]
+
 _COMPILED_YOUTUBE = [re.compile(p, re.IGNORECASE) for p in _YOUTUBE_PATTERNS]
+_COMPILED_INSTAGRAM = [re.compile(p, re.IGNORECASE) for p in _INSTAGRAM_PATTERNS]
+
+
+def detect_platform(url: str) -> str | None:
+    """
+    Identify the platform from *url*.
+
+    Returns
+    -------
+    ``"youtube"``, ``"instagram"``, or ``None`` when the URL is not
+    recognised as either platform.
+    """
+    if not url or not url.strip():
+        return None
+    url = url.strip()
+    for pattern in _COMPILED_YOUTUBE:
+        if pattern.match(url):
+            return "youtube"
+    for pattern in _COMPILED_INSTAGRAM:
+        if pattern.match(url):
+            return "instagram"
+    return None
 
 
 def validate_url(url: str) -> tuple[bool, str]:
     """
-    Validate that *url* is a well-formed YouTube URL.
+    Validate that *url* is a well-formed YouTube or Instagram URL.
 
     Returns
     -------
@@ -61,16 +93,19 @@ def validate_url(url: str) -> tuple[bool, str]:
     # Reject obviously non-HTTP schemes (file://, ftp://, …)
     scheme = parsed.scheme.lower()
     if scheme not in ("http", "https", ""):
-        return False, f"Unsupported URL scheme: '{scheme}'. Only HTTP/HTTPS URLs are accepted."
+        return False, (
+            f"Unsupported URL scheme: '{scheme}'. "
+            "Only HTTP/HTTPS URLs are accepted."
+        )
 
-    # Must match at least one YouTube pattern
-    for pattern in _COMPILED_YOUTUBE:
-        if pattern.match(url):
-            return True, ""
+    # Must match a known YouTube or Instagram pattern
+    if detect_platform(url) is not None:
+        return True, ""
 
     return False, (
-        "The URL does not appear to be a supported YouTube link. "
-        "Please paste a youtube.com/watch?v=… or youtu.be/… URL."
+        "The URL does not appear to be a supported YouTube or Instagram link. "
+        "Paste a youtube.com/watch?v=…, youtu.be/…, "
+        "instagram.com/p/…, or instagram.com/reel/… URL."
     )
 
 
