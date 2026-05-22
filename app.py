@@ -460,6 +460,12 @@ url_input = st.text_input(
     key="url_input",
 )
 
+# ── Reset state when URL changes ──────────────────────────────────────────
+if url_input != st.session_state.last_url and st.session_state.video_info is not None:
+    st.session_state.video_info = None
+    st.session_state.download_result = None
+    st.session_state.download_filepath = None
+
 # ── Action buttons ────────────────────────────────────────────────────────
 col_fetch, col_dl = st.columns(2)
 with col_fetch:
@@ -473,15 +479,12 @@ with col_dl:
         "⬇️  Download",
         type="primary",
         use_container_width=True,
-        disabled=st.session_state.video_info is None,
+        disabled=(
+            st.session_state.video_info is None
+            or url_input != st.session_state.last_url
+        ),
         key="btn_download",
     )
-
-# ── Reset state when URL changes ──────────────────────────────────────────
-if url_input != st.session_state.last_url and st.session_state.video_info is not None:
-    st.session_state.video_info = None
-    st.session_state.download_result = None
-    st.session_state.download_filepath = None
 
 # ── Fetch video info ──────────────────────────────────────────────────────
 if fetch_clicked:
@@ -524,9 +527,9 @@ if st.session_state.video_info is not None:
         c1.metric("Duration", info.duration_str)
         c2.metric("Views", _fmt_views(info.view_count))
         # Truncate long channel names so the metric doesn't overflow
-        uploader_display = html.escape(info.uploader)
+        uploader_display = info.uploader
         if len(uploader_display) > 20:
-            uploader_display = uploader_display[:18] + "…"
+            uploader_display = uploader_display[:19] + "…"
         c3.metric("Channel", uploader_display)
 
         if info.description:

@@ -198,7 +198,6 @@ media-downloader/
 ├── requirements.txt        # Python dependencies
 ├── .env.example            # Environment variable reference
 ├── README.md
-├── CLAUDE.md
 ├── .gitignore
 ├── .streamlit/
 │   └── config.toml         # Dark theme configuration
