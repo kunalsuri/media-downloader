@@ -328,9 +328,9 @@ if st.session_state.video_info is not None:
         if info.thumbnail_url:
             st.image(info.thumbnail_url, use_container_width=True)
     with meta_col:
-        # FIX: Use st.markdown without unsafe HTML for the title to avoid
-        # markdown injection from adversarial video titles.
-        st.markdown(f"**{html.escape(info.title)}**")
+        # FIX: Render the title as bold HTML so html.escape() fully prevents
+        # both XSS and markdown injection from adversarial video titles.
+        st.markdown(f"<b>{html.escape(info.title)}</b>", unsafe_allow_html=True)
         # FIX: Escape all user-controlled fields before injecting them into
         # the unsafe_allow_html block to prevent stored XSS.  view_count is
         # cast to int earlier so no escaping needed there.
@@ -360,7 +360,6 @@ if download_clicked and st.session_state.video_info is not None:
     quality = st.session_state.quality
 
     progress_bar = st.progress(0, text="Starting download…")
-    status_text = st.empty()
 
     def _progress_hook(d: dict) -> None:
         """Update Streamlit progress bar from yt-dlp hook data."""

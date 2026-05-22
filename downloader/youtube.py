@@ -108,7 +108,7 @@ _ERROR_HINTS: list[tuple[str, str]] = [
     ("HTTP Error 404", "The video was not found (HTTP 404). Please check the URL."),
     ("Unable to download", "Network error: unable to reach YouTube. Please check your connection."),
     ("No video formats found", "No downloadable formats were found for this video."),
-    ("Filesize exceeds", f"The file exceeds the maximum allowed size of 2 GiB."),
+    ("larger than max-filesize", f"The file exceeds the maximum allowed size of {_MAX_FILESIZE_BYTES // (1024 ** 3)} GiB."),
 ]
 
 
