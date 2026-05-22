@@ -8,7 +8,7 @@
 #
 #  WHAT IT DOES
 #    1. Detects Windows version and CPU architecture (x86_64 / ARM64)
-#    2. Identifies the best available package manager (winget → Chocolatey)
+#    2. Identifies the best available package manager (winget → Chocolatey → Scoop)
 #    3. Checks for required tools: Python 3, pip, git, ffmpeg
 #    4. Installs any missing tools via the detected package manager
 #    5. Creates / re-uses a Python virtual environment at .venv\
@@ -42,6 +42,21 @@
 # Use strict mode to catch common scripting errors.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# Initialised here so the cleanup trap below can reference them safely under
+# Set-StrictMode regardless of where the script exits.
+$VenvWasNew = $false
+$VenvDir    = $null   # overwritten to the real path once $ScriptDir is resolved
+
+# On any terminating error, remove a newly-created (and therefore incomplete)
+# virtual environment so the next run starts from a clean slate.
+trap {
+    if ($VenvWasNew -and $VenvDir -and (Test-Path $VenvDir)) {
+        Write-Warn "Removing incomplete virtual environment due to setup failure…"
+        Remove-Item -Recurse -Force $VenvDir -ErrorAction SilentlyContinue
+    }
+    break
+}
 
 # =============================================================================
 #  Colour helpers & logging
@@ -105,11 +120,15 @@ function Invoke-WithRetry {
 Write-Banner
 
 # Confirm we are running on Windows.
-if ($PSVersionTable.PSVersion.Major -ge 6 -and -not $IsWindows) {
-    Write-Err "This script is designed for Windows only."
-    Write-Info "For macOS, run:  ./setup_macos.sh"
-    Write-Info "For Linux, run:  ./setup_linux.sh"
-    exit 1
+# Check PS major version before referencing $IsWindows, which is undefined in
+# Windows PowerShell 5.1 and would throw under Set-StrictMode -Version Latest.
+if ($PSVersionTable.PSVersion.Major -ge 6) {
+    if (-not $IsWindows) {
+        Write-Err "This script is designed for Windows only."
+        Write-Info "For macOS, run:  ./setup_macos.sh"
+        Write-Info "For Linux, run:  ./setup_linux.sh"
+        exit 1
+    }
 }
 
 # Detect architecture.
@@ -135,9 +154,6 @@ Write-Info "Project root  : $ScriptDir"
 Write-Info "Virtual env   : $VenvDir"
 Write-Info "Streamlit port: $StreamlitPort"
 
-# Track whether the venv was just created (for cleanup on failure).
-$VenvWasNew = $false
-
 # =============================================================================
 #  SECTION 1 — Validate project files
 # =============================================================================
@@ -158,7 +174,7 @@ if (-not (Test-Path $Requirements)) {
 Write-Ok "app.py and requirements.txt found."
 
 # =============================================================================
-#  SECTION 2 — Detect package manager (winget → Chocolatey)
+#  SECTION 2 — Detect package manager (winget → Chocolatey → Scoop)
 # =============================================================================
 
 Write-Step "Detecting package manager"
@@ -412,20 +428,13 @@ Write-Step "Verifying package imports"
 
 $CriticalModules = @("streamlit", "yt_dlp", "requests", "certifi")
 foreach ($module in $CriticalModules) {
-    try {
-        & python -c "import $module" 2>&1 | Out-Null
-        Write-Ok "  ✔  $module"
-    } catch {
-        Write-Err "Failed to import '$module'."
-        Write-Info "Try: `$env:RECREATE_VENV='1'; .\setup_windows.ps1"
-        exit 1
-    }
-    # Also verify via exit code since PowerShell may not surface Python exit codes as exceptions.
     $result = & python -c "import $module" 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Err "Failed to import '$module': $result"
+        Write-Info "Try: `$env:RECREATE_VENV='1'; .\setup_windows.ps1"
         exit 1
     }
+    Write-Ok "  ✔  $module"
 }
 
 Write-Ok "All critical imports verified."
@@ -460,11 +469,11 @@ Write-Host ""
 Set-Location $ScriptDir
 
 # Open the browser after a short delay to let Streamlit start up.
-Start-Job -ScriptBlock {
+$BrowserJob = Start-Job -ScriptBlock {
     param($port)
     Start-Sleep -Seconds 4
     Start-Process "http://localhost:$port"
-} -ArgumentList $StreamlitPort | Out-Null
+} -ArgumentList $StreamlitPort
 
 # Launch Streamlit — this blocks until the user presses Ctrl+C.
 try {
@@ -473,6 +482,6 @@ try {
         "--server.headless=false" `
         "--browser.gatherUsageStats=false"
 } finally {
-    # Cleanup background jobs on exit.
-    Get-Job | Remove-Job -Force
+    # Cleanup only the browser-launch background job, not any unrelated jobs.
+    $BrowserJob | Remove-Job -Force
 }

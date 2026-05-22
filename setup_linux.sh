@@ -336,7 +336,7 @@ log_ok "Python version OK (≥ 3.10)"
 if ! "$PYTHON_BIN" -m venv --help &>/dev/null; then
     log_warn "python3-venv module not found. Attempting to install…"
     case "$PKG_MANAGER" in
-        apt)    maybe_sudo apt-get install -y -qq "python$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')-venv" python3-venv ;;
+        apt)    maybe_sudo apt-get install -y -qq "python$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')-venv" python3-venv ;;
         dnf)    maybe_sudo dnf install -y -q python3-venv ;;
         pacman) log_info "venv is included with python on Arch." ;;
         *)      log_error "Cannot auto-install python3-venv. Install it manually." ; exit 1 ;;
