@@ -20,13 +20,14 @@
 | **MP4 video** | Best quality video + audio merged via ffmpeg |
 | **MP3 audio** | Audio-only extraction at 192 kbps |
 | **Quality selector** | best, 1080p, 720p, 480p, 360p |
-| **Video metadata** | Thumbnail, title, uploader, duration, view count |
-| **Progress bar** | Real-time download speed & ETA |
+| **Video metadata** | Thumbnail, title, channel, duration, view count |
+| **Real-time progress** | Download speed & ETA inside a collapsible status panel |
 | **In-browser save** | One-click file download without exposing server paths |
-| **Error handling** | Unavailable / private / geo-blocked / copyright errors |
+| **Modern sidebar UI** | Format, quality, and system status in a collapsible sidebar |
+| **Error handling** | Unavailable / private / geo-blocked / copyright / size-limit errors |
 | **Filename safety** | Unicode normalisation, illegal-char stripping, duplicate prevention |
-| **Dark UI** | Polished dark theme with gradient accents |
-| **Cross-platform** | Dedicated setup scripts for macOS, Linux, and Windows |
+| **Security hardened** | XSS prevention, socket timeouts, 2 GiB download cap |
+| **Cross-platform** | One-click launcher for Windows; setup scripts for macOS & Linux |
 
 ---
 
@@ -36,13 +37,74 @@
 
 ---
 
-## 🚀 Quick Start — One Command Per Platform
+## 🚀 Quick Start
 
-Clone the repository first, then run the setup script for your operating system.
+Clone the repository first:
 
 ```bash
 git clone https://github.com/kunalsuri/media-downloader.git
 cd media-downloader
+```
+
+Then choose the launcher for your operating system:
+
+---
+
+### 🪟 Windows 10 / 11 — double-click launcher
+
+The fastest way to get started on Windows:
+
+1. Open the `media-downloader` folder in Explorer
+2. **Double-click `launch.bat`**
+3. A terminal window opens — watch setup progress, then the browser opens automatically
+
+That's it. The script creates a virtual environment, installs dependencies, and launches the app. On later runs it skips setup and starts in ~5 seconds.
+
+**Environment variable overrides (optional):**
+
+```cmd
+:: Change port (run in CMD before double-clicking, or set in System Properties)
+set STREAMLIT_PORT=8888
+launch.bat
+
+:: Rebuild virtual environment from scratch
+set RECREATE_VENV=1
+launch.bat
+```
+
+> **Need system-level dependencies** (Python, git, ffmpeg) installed automatically?
+> Use `setup_windows.ps1` instead — it installs everything via winget/Chocolatey/Scoop.
+
+---
+
+### 🪟 Windows — full setup via PowerShell
+
+Open **PowerShell** and run:
+
+```powershell
+# Allow local scripts to run (one-time, current user only — safe)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Navigate to the project directory
+cd C:\path\to\media-downloader
+
+# Run full setup and launch
+.\setup_windows.ps1
+```
+
+**What it does automatically:**
+- ✅ Detects Windows architecture (x86_64 / ARM64)
+- ✅ Detects best available package manager: `winget` → `choco` → `scoop`
+- ✅ Installs Python 3, git, and ffmpeg if missing
+- ✅ Creates `.venv\`, installs Python packages, verifies imports
+- ✅ Opens the app at **http://localhost:8501**
+
+**PowerShell environment options:**
+
+```powershell
+$env:STREAMLIT_PORT="8888"; .\setup_windows.ps1   # Custom port
+$env:SKIP_PKG_MANAGER="1"; .\setup_windows.ps1    # Skip winget/choco/scoop checks
+$env:RECREATE_VENV="1"; .\setup_windows.ps1       # Rebuild virtual environment
 ```
 
 ---
@@ -58,26 +120,18 @@ chmod +x setup_macos.sh
 - ✅ Detects Apple Silicon (arm64) vs Intel (x86_64) architecture
 - ✅ Installs Homebrew if missing (no sudo required)
 - ✅ Installs ffmpeg via Homebrew
-- ✅ Creates a Python virtual environment at `.venv/`
-- ✅ Installs all Python dependencies from `requirements.txt`
-- ✅ Verifies imports and opens the app at **http://localhost:8501**
+- ✅ Creates `.venv/`, installs packages, verifies imports
+- ✅ Opens the app at **http://localhost:8501**
 
-**Environment variable options:**
-
-| Variable | Default | Description |
-|---|---|---|
-| `STREAMLIT_PORT` | `8501` | Change the server port |
-| `SKIP_BREW` | `0` | Set to `1` to skip Homebrew/ffmpeg checks |
-| `RECREATE_VENV` | `0` | Set to `1` to rebuild the virtual environment from scratch |
+**Environment options:**
 
 ```bash
-# Examples
 STREAMLIT_PORT=8888 ./setup_macos.sh
-SKIP_BREW=1 ./setup_macos.sh
-RECREATE_VENV=1 ./setup_macos.sh
+SKIP_BREW=1 ./setup_macos.sh       # Skip Homebrew/ffmpeg checks
+RECREATE_VENV=1 ./setup_macos.sh   # Rebuild virtual environment
 ```
 
-> **Note:** `setup_and_run.sh` (legacy macOS script) is still available and works identically.
+> `setup_and_run.sh` (legacy macOS script) still works identically.
 
 ---
 
@@ -89,23 +143,14 @@ chmod +x setup_linux.sh
 ```
 
 **What it does automatically:**
-- ✅ Detects the Linux distribution (Ubuntu/Debian/Fedora/Arch/Manjaro/…)
-- ✅ Selects the correct package manager: `apt`, `dnf`, `yum`, or `pacman`
-- ✅ Installs Python 3, pip, venv support, git, and ffmpeg via the native package manager
-- ✅ Creates a Python virtual environment at `.venv/`
-- ✅ Installs all Python dependencies from `requirements.txt`
-- ✅ Verifies imports and opens the app at **http://localhost:8501**
+- ✅ Detects distro and selects `apt`, `dnf`, `yum`, or `pacman`
+- ✅ Installs Python 3, pip, venv, git, and ffmpeg
+- ✅ Creates `.venv/`, installs packages, verifies imports
+- ✅ Opens the app at **http://localhost:8501**
 
-**Environment variable options:**
-
-| Variable | Default | Description |
-|---|---|---|
-| `STREAMLIT_PORT` | `8501` | Change the server port |
-| `SKIP_PKG_MANAGER` | `0` | Set to `1` to skip `apt`/`dnf`/`pacman` checks |
-| `RECREATE_VENV` | `0` | Set to `1` to rebuild the virtual environment from scratch |
+**Environment options:**
 
 ```bash
-# Examples
 STREAMLIT_PORT=8888 ./setup_linux.sh
 SKIP_PKG_MANAGER=1 ./setup_linux.sh
 RECREATE_VENV=1 ./setup_linux.sh
@@ -119,90 +164,23 @@ RECREATE_VENV=1 ./setup_linux.sh
 | RPM-based | Fedora 36+, RHEL 8+, CentOS Stream, Rocky, Alma | `dnf` / `yum` |
 | Arch-based | Arch Linux, Manjaro, EndeavourOS, Garuda | `pacman` |
 
-> **Tip:** On distributions where ffmpeg requires additional repositories
-> (e.g., RPM Fusion on Fedora), the script attempts to enable them automatically.
-
----
-
-### 🪟 Windows 10 / 11
-
-Open **PowerShell** (search for "PowerShell" in the Start menu), then run:
-
-```powershell
-# Allow local scripts to run (one-time, current user only — safe)
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-# Navigate to the project directory
-cd C:\path\to\media-downloader
-
-# Run setup and launch
-.\setup_windows.ps1
-```
-
-**What it does automatically:**
-- ✅ Detects Windows architecture (x86_64 / ARM64)
-- ✅ Detects the best available package manager: `winget` → `choco` → `scoop`
-- ✅ Installs Python 3, git, and ffmpeg if missing
-- ✅ Creates a Python virtual environment at `.venv\`
-- ✅ Installs all Python dependencies from `requirements.txt`
-- ✅ Verifies imports and opens the app at **http://localhost:8501**
-
-**Environment variable options (PowerShell syntax):**
-
-```powershell
-# Change port
-$env:STREAMLIT_PORT="8888"; .\setup_windows.ps1
-
-# Skip package manager checks
-$env:SKIP_PKG_MANAGER="1"; .\setup_windows.ps1
-
-# Rebuild virtual environment
-$env:RECREATE_VENV="1"; .\setup_windows.ps1
-```
-
-**Supported package managers (auto-detected in priority order):**
-
-| Package Manager | Availability | Notes |
-|---|---|---|
-| **winget** | Built into Windows 10 1809+ and Windows 11 | Recommended; no extra install needed |
-| **Chocolatey** | Manual install required | [chocolatey.org/install](https://chocolatey.org/install) |
-| **Scoop** | Manual install required | [scoop.sh](https://scoop.sh) |
-
-> **Note:** If no package manager is detected, the script will warn you and skip
-> automatic installation. In that case, install Python, git, and ffmpeg manually
-> and then re-run the script with `$env:SKIP_PKG_MANAGER="1"`.
-
 ---
 
 ### 🔧 Manual Setup (any OS)
 
-If you prefer to install dependencies yourself:
-
 ```bash
-# 1. Prerequisites: Python ≥ 3.10 and ffmpeg must be installed and on PATH
+# Prerequisites: Python ≥ 3.10 and ffmpeg on PATH
 
-# 2. Create and activate a virtual environment
 python -m venv .venv
 source .venv/bin/activate          # macOS / Linux
 # .venv\Scripts\Activate.ps1       # Windows PowerShell
+# .venv\Scripts\activate.bat       # Windows CMD
 
-# 3. Install Python dependencies
 pip install --upgrade pip wheel setuptools
 pip install -r requirements.txt
-
-# 4. Run the app
 streamlit run app.py
+# Opens at http://localhost:8501
 ```
-
-The app opens at **http://localhost:8501**.
-
----
-
-## ⚙️ Environment Variables Reference
-
-See [`.env.example`](.env.example) for a full annotated list of all supported
-environment variables. Copy it to `.env` for your own reference — the setup
-scripts read variables from the shell environment, not from `.env` directly.
 
 ---
 
@@ -210,21 +188,24 @@ scripts read variables from the shell environment, not from `.env` directly.
 
 ```
 media-downloader/
-├── app.py                  # Streamlit UI entry point
-├── setup_macos.sh          # macOS one-command setup & launcher (Apple Silicon + Intel)
-├── setup_linux.sh          # Linux one-command setup & launcher (apt / dnf / pacman)
-├── setup_windows.ps1       # Windows one-command setup & launcher (winget / choco / scoop)
-├── setup_and_run.sh        # Legacy macOS script (kept for backward compatibility)
-├── requirements.txt        # Python package dependencies
-├── .env.example            # Environment variable reference template
+├── app.py                  # Streamlit UI — sidebar, main area, session state
+├── CLAUDE.md               # AI assistant context file (architecture, decisions, tasks)
+├── launch.bat              # Windows double-click launcher ← start here on Windows
+├── setup_macos.sh          # macOS one-command setup & launcher
+├── setup_linux.sh          # Linux one-command setup & launcher
+├── setup_windows.ps1       # Windows full setup (installs Python, git, ffmpeg)
+├── setup_and_run.sh        # Legacy macOS script (backward compat)
+├── requirements.txt        # Python dependencies
+├── .env.example            # Environment variable reference
 ├── README.md
+├── CLAUDE.md
 ├── .gitignore
 ├── .streamlit/
-│   └── config.toml         # Dark-theme Streamlit configuration
+│   └── config.toml         # Dark theme configuration
 ├── downloads/              # Downloaded media files (git-ignored, .gitkeep tracked)
 └── downloader/             # Core downloader package
-    ├── __init__.py
-    ├── youtube.py          # YoutubeDownloader class (yt-dlp wrapper)
+    ├── __init__.py         # Exports: YoutubeDownloader, validate_url, sanitize_filename
+    ├── youtube.py          # YoutubeDownloader, VideoInfo, DownloadResult
     └── utils.py            # URL validation, filename sanitisation, helpers
 ```
 
@@ -232,60 +213,71 @@ media-downloader/
 
 | File | Responsibility |
 |---|---|
-| `app.py` | Streamlit page, CSS, session state, UI components |
+| `app.py` | Streamlit page, sidebar settings, session state, UI components |
 | `downloader/youtube.py` | `YoutubeDownloader` — info fetching, download orchestration, error mapping |
 | `downloader/utils.py` | `validate_url`, `sanitize_filename`, `build_output_path`, `format_filesize` |
+| `launch.bat` | Windows double-click launcher with first-run / subsequent-run optimisation |
+| `setup_windows.ps1` | Full Windows system setup via winget/choco/scoop |
 | `setup_macos.sh` | macOS setup: Homebrew, ffmpeg, venv, pip, launch |
 | `setup_linux.sh` | Linux setup: apt/dnf/pacman, venv, pip, launch |
-| `setup_windows.ps1` | Windows setup: winget/choco/scoop, venv, pip, launch |
 
 ---
 
 ## ⚙️ Configuration
 
-All media-downloader settings are handled through the Streamlit UI at runtime.
-No `.env` file is required for basic usage.
+All runtime settings live in the **sidebar** of the running app:
 
-To hard-code a custom `downloads/` directory, edit the `DOWNLOADS_DIR`
-constant at the top of `app.py`.
+| Setting | Location | Options |
+|---|---|---|
+| Output format | Sidebar → Output Format | MP4 (Video), MP3 (Audio only) |
+| Video quality | Sidebar → Video Quality | best, 1080p, 720p, 480p, 360p |
+| ffmpeg status | Sidebar → System | Auto-detected at startup |
+
+Server settings via environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `STREAMLIT_PORT` | `8501` | Port the Streamlit server listens on |
+| `RECREATE_VENV` | `0` | Set `1` to rebuild the virtual environment |
+| `SKIP_PKG_MANAGER` | `0` | Set `1` to skip system package checks (Linux/Windows) |
+| `SKIP_BREW` | `0` | Set `1` to skip Homebrew checks (macOS) |
 
 ---
 
-## 🔒 Security & Legal
+## 🔒 Security
 
-* Downloaded files are saved to the local `downloads/` directory on the
-  **server** running Streamlit and served to the browser via `st.download_button`.
-  No file paths are ever exposed to the client.
-* Invalid, private, geo-blocked, and copyright-restricted videos are rejected
-  gracefully with clear error messages.
-* The setup scripts never store credentials and only install packages from
-  official sources (Homebrew formulae, official Linux repos, winget/choco sources).
-* This tool is intended for **personal use only**.  Always respect YouTube's
-  [Terms of Service](https://www.youtube.com/t/terms) and applicable copyright
-  laws before downloading any content.
+- **XSS prevention**: All YouTube metadata is HTML-escaped before rendering
+- **Absolute download path**: Files always land in `<project>/downloads/` regardless of working directory
+- **Network timeout**: 30-second socket timeout on all yt-dlp calls prevents UI hangs
+- **Download cap**: Maximum file size is 2 GiB to prevent disk/RAM exhaustion
+- **No credentials stored**: Setup scripts never save API keys or passwords
+- **Official sources only**: All packages installed from PyPI, Homebrew, official Linux repos, or winget
+
+> This tool is intended for **personal use only**. Always respect YouTube's
+> [Terms of Service](https://www.youtube.com/t/terms) and applicable copyright laws.
 
 ---
 
 ## 🔭 Extending to Other Platforms
 
-`yt-dlp` supports 1000+ sites out of the box (Instagram, TikTok, Twitter/X,
-Vimeo, Facebook, …).  To add a new platform:
+`yt-dlp` supports 1000+ sites out of the box (Instagram, TikTok, Twitter/X, Vimeo, …).
+To add a new platform:
 
-1. Add a URL-validation regex to `downloader/utils.py` → `_YOUTUBE_PATTERNS`
-   (or create a separate validator per platform).
-2. Optionally subclass `YoutubeDownloader` in a new `downloader/<platform>.py`
-   file if platform-specific post-processing is needed.
-3. Wire the new validator and downloader into `app.py`.
+1. Add URL-validation patterns to `_YOUTUBE_PATTERNS` in `downloader/utils.py`
+2. Optionally subclass `YoutubeDownloader` in `downloader/<platform>.py` for platform-specific options
+3. Wire the new validator and downloader into `app.py`
+
+See `CLAUDE.md` for a step-by-step guide.
 
 ---
 
 ## 🤝 Contributing
 
-Pull requests are welcome!  Please open an issue first to discuss major changes.
+Pull requests are welcome! Please open an issue first to discuss major changes.
 
 ```bash
-# Run a quick syntax / import check
-python -m py_compile app.py downloader/youtube.py downloader/utils.py
+# Syntax / import check (no test framework required)
+python -m py_compile app.py downloader/youtube.py downloader/utils.py && echo OK
 ```
 
 ---
