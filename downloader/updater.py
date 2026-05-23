@@ -298,8 +298,14 @@ def run_full_update(verbose: bool = False) -> UpdateResult:
     _log(f"[yt-dlp] ✓ yt-dlp updated to {info.latest}")
 
     # ── Rewrite requirements.txt ───────────────────────────────────────────
-    changed = update_requirements_file(info.latest)
     result.was_updated = True
+    try:
+        changed = update_requirements_file(info.latest)
+    except Exception as exc:
+        result.error = f"requirements.txt update failed: {exc}"
+        _log(f"[yt-dlp] requirements.txt update FAILED. {exc}")
+        return result
+
     result.requirements_updated = changed
 
     if changed:

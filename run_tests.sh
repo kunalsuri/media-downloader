@@ -50,7 +50,7 @@ done
 PYTEST_ARGS=("--tb=short" "-v")
 
 if [ "$NETWORK" = false ]; then
-    PYTEST_ARGS+=("-m" "not slow")
+    PYTEST_ARGS+=("-m" "not network and not slow")
     echo "[*] Offline mode: network/slow tests skipped (pass --network to include)."
 else
     echo "[*] Network mode: PyPI + YouTube live tests INCLUDED."

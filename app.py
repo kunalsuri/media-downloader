@@ -413,7 +413,7 @@ def _startup_ytdlp_version_check():
     Query PyPI for the latest yt-dlp.  Runs once per server process.
     Returns a VersionInfo (or None on hard failure — should never happen).
     """
-    return get_version_info(timeout=6)
+    return get_version_info(timeout=2)
 
 
 _ytdlp_version_info = _startup_ytdlp_version_check()

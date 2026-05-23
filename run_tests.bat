@@ -43,7 +43,7 @@ REM ── Resolve pytest arguments ──────────────�
 REM  Default: run all tests EXCEPT network/slow (fast, offline)
 REM  Pass --network to include PyPI + YouTube live checks.
 
-set "PYTEST_ARGS=-m "not slow" --tb=short -v"
+set PYTEST_ARGS=-m "not network and not slow" --tb=short -v
 set "COV_ARGS="
 
 for %%A in (%*) do (

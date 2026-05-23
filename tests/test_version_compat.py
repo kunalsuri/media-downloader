@@ -193,6 +193,23 @@ class TestUpdaterModule:
         assert result.error is None
         assert result.version_info.network_error is not None
 
+    def test_run_full_update_handles_requirements_write_errors(self) -> None:
+        with patch(
+            "downloader.updater.get_pypi_version",
+            return_value="9999.12.31",
+        ), patch(
+            "downloader.updater.install_update",
+            return_value=(True, ""),
+        ), patch(
+            "downloader.updater.update_requirements_file",
+            side_effect=PermissionError("read-only"),
+        ):
+            result = run_full_update(verbose=False)
+
+        assert result.was_updated is True
+        assert result.requirements_updated is False
+        assert result.error == "requirements.txt update failed: read-only"
+
 
 class TestYtDlpApiSurface:
     """
