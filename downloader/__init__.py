@@ -20,4 +20,9 @@ __all__ = [
     "validate_url",
     "sanitize_filename",
     "detect_platform",
+    # Note: downloader.updater is intentionally NOT imported here.
+    # It is infrastructure (not a user-facing download class) and importing it
+    # at package load time would cause a RuntimeWarning when the module is also
+    # invoked as a script via  python -m downloader.updater.
+    # Import it directly:  from downloader.updater import get_version_info
 ]

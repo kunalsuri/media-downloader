@@ -26,6 +26,7 @@ from downloader import (
     YoutubeDownloader,
     validate_url,
 )
+from downloader.updater import get_version_info
 from downloader.utils import detect_platform, format_filesize
 
 # ---------------------------------------------------------------------------
@@ -390,6 +391,41 @@ def _init_state() -> None:
 
 
 _init_state()
+
+# ---------------------------------------------------------------------------
+# yt-dlp version check — runs once per server session via @st.cache_resource.
+#
+# Why cache_resource and not cache_data?
+#   cache_resource is designed for one-time global initialisation (it runs
+#   exactly once per server process, not per user session or page rerun).
+#   cache_data serialises its return value on every call — unnecessary here.
+#
+# What this does NOT do:
+#   It only checks and notifies.  Installation is intentionally left to the
+#   launch scripts (launch.bat / launch.sh) which run before Streamlit starts,
+#   so the updated yt-dlp is active immediately — no restart needed.
+#   If the user launched the app directly (streamlit run app.py), they see
+#   a banner telling them to restart via launch.bat to apply the update.
+# ---------------------------------------------------------------------------
+@st.cache_resource
+def _startup_ytdlp_version_check():
+    """
+    Query PyPI for the latest yt-dlp.  Runs once per server process.
+    Returns a VersionInfo (or None on hard failure — should never happen).
+    """
+    return get_version_info(timeout=6)
+
+
+_ytdlp_version_info = _startup_ytdlp_version_check()
+
+if _ytdlp_version_info is not None and _ytdlp_version_info.update_available:
+    st.warning(
+        f"🔄 **yt-dlp update available** — "
+        f"installed `{_ytdlp_version_info.installed}`, "
+        f"latest `{_ytdlp_version_info.latest}`  \n"
+        f"Restart the app via **launch.bat** (or **launch.sh**) to update automatically.",
+        icon="⚠️",
+    )
 
 # ---------------------------------------------------------------------------
 # Platform detection — read the text-input key from session state so the
