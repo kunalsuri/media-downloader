@@ -164,6 +164,24 @@ if "!FIRST_RUN!"=="1" (
 )
 
 REM =============================================================================
+REM  STEP 3.5 — Check for yt-dlp updates and install if a newer version exists
+REM
+REM  This runs BEFORE Streamlit starts so the updated yt-dlp is active for
+REM  the entire session — no restart required.
+REM  If PyPI is unreachable (no internet), the step is skipped silently.
+REM =============================================================================
+echo.
+echo  [3.5/4] Checking for yt-dlp updates...
+
+python -m downloader.updater
+if %errorlevel% neq 0 (
+    REM A non-zero exit only means the pip install failed, not that the check
+    REM failed.  Network errors exit 0.  We warn but do not abort the launch.
+    echo  [WARN]  yt-dlp update attempt returned an error (see above).
+    echo          The app will start with the currently installed version.
+)
+
+REM =============================================================================
 REM  STEP 4 — Launch Streamlit
 REM =============================================================================
 echo.
