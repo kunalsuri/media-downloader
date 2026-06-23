@@ -114,10 +114,11 @@ User clicks Download
 | `downloader/__init__.py` | Package surface: all five public symbols |
 | `requirements.txt` | Python dependencies (streamlit, yt-dlp, requests, certifi) |
 | `.streamlit/config.toml` | Dark theme: primaryColor #ff4b6e, background #0d1117 |
-| `launch.bat` | Windows double-click launcher — creates venv, installs deps, starts app |
-| `setup_windows.ps1` | Full Windows setup via winget/choco/scoop (system-level deps) |
-| `setup_macos.sh` | macOS setup via Homebrew |
-| `setup_linux.sh` | Linux setup via apt/dnf/pacman |
+| `scripts/1Click-media-downloader.bat` | Windows double-click launcher — creates venv, installs deps, starts app |
+| `scripts/launch.ps1` | Windows PowerShell launcher |
+| `scripts/setup_windows.ps1` | Full Windows setup via winget/choco/scoop (system-level deps) |
+| `scripts/setup_macos.sh` | macOS setup via Homebrew |
+| `scripts/setup_linux.sh` | Linux setup via apt/dnf/pacman |
 | `CLAUDE.md` | This file |
 
 ---
@@ -135,7 +136,7 @@ streamlit run app.py
 # Opens at http://localhost:8501
 ```
 
-**Windows shortcut:** double-click `launch.bat` — handles venv, deps, and browser.
+**Windows shortcut:** double-click `scripts\1Click-media-downloader.bat` — handles venv, deps, and browser.
 
 ---
 
