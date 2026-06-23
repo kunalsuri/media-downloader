@@ -8,6 +8,7 @@ REM    run_tests.bat --network — also runs PyPI + YouTube live tests
 REM    run_tests.bat --cov     — adds coverage report
 REM  =========================================================================
 setlocal
+cd /d "%~dp0.."
 
 echo.
 echo ========================================
@@ -17,10 +18,10 @@ echo.
 
 REM ── Activate virtual environment if present ──────────────────────────────
 if exist ".venv\Scripts\activate.bat" (
-    echo [*] Activating virtual environment (.venv) ...
+    echo [*] Activating virtual environment .venv ...
     call .venv\Scripts\activate.bat
 ) else if exist "venv\Scripts\activate.bat" (
-    echo [*] Activating virtual environment (venv) ...
+    echo [*] Activating virtual environment venv ...
     call venv\Scripts\activate.bat
 ) else (
     echo [!] No .venv found — running with system Python.
@@ -30,7 +31,7 @@ if exist ".venv\Scripts\activate.bat" (
 
 REM ── Install dev dependencies ─────────────────────────────────────────────
 echo [*] Installing test dependencies (requirements-dev.txt) ...
-pip install -r requirements-dev.txt -q
+python -m pip install -r requirements-dev.txt -q
 if errorlevel 1 (
     echo.
     echo [ERROR] Dependency installation failed.
@@ -62,7 +63,7 @@ for %%A in (%*) do (
 REM ── Run pytest ────────────────────────────────────────────────────────────
 echo [*] Running tests ...
 echo.
-pytest %PYTEST_ARGS% %COV_ARGS%
+python -m pytest %PYTEST_ARGS% %COV_ARGS%
 set EXIT_CODE=%ERRORLEVEL%
 
 REM ── Summary ───────────────────────────────────────────────────────────────

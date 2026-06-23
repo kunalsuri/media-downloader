@@ -281,7 +281,7 @@ def run_full_update(verbose: bool = False) -> UpdateResult:
     _log(f"[yt-dlp] Latest    : {info.latest}")
 
     if not info.update_available:
-        _log("[yt-dlp] Already up to date. ✓")
+        _log("[yt-dlp] Already up to date.")
         return result
 
     # ── A newer version is available — install it ──────────────────────────
@@ -295,7 +295,7 @@ def run_full_update(verbose: bool = False) -> UpdateResult:
         _log(f"[yt-dlp] Update FAILED. {err}")
         return result
 
-    _log(f"[yt-dlp] ✓ yt-dlp updated to {info.latest}")
+    _log(f"[yt-dlp] Updated to {info.latest}")
 
     # ── Rewrite requirements.txt ───────────────────────────────────────────
     result.was_updated = True
@@ -309,7 +309,7 @@ def run_full_update(verbose: bool = False) -> UpdateResult:
     result.requirements_updated = changed
 
     if changed:
-        _log(f"[yt-dlp] ✓ requirements.txt updated  (yt-dlp>={info.latest})")
+        _log(f"[yt-dlp] requirements.txt updated (yt-dlp>={info.latest})")
     else:
         _log("[yt-dlp]   (requirements.txt pin unchanged — no '>=' pattern found)")
 

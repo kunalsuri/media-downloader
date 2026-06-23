@@ -141,10 +141,11 @@ RECREATE_VENV="${RECREATE_VENV:-0}"
 
 # Resolve the absolute path to the project directory.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="${SCRIPT_DIR}/.venv"
-REQUIREMENTS="${SCRIPT_DIR}/requirements.txt"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+VENV_DIR="${PROJECT_ROOT}/.venv"
+REQUIREMENTS="${PROJECT_ROOT}/requirements.txt"
 
-log_info "Project root  : ${SCRIPT_DIR}"
+log_info "Project root  : ${PROJECT_ROOT}"
 log_info "Virtual env   : ${VENV_DIR}"
 log_info "Streamlit port: ${STREAMLIT_PORT}"
 
@@ -208,8 +209,8 @@ log_ok "Package manager: ${PKG_MANAGER}"
 # =============================================================================
 log_step "Validating project files"
 
-if [[ ! -f "${SCRIPT_DIR}/app.py" ]]; then
-    log_error "app.py not found in ${SCRIPT_DIR}."
+if [[ ! -f "${PROJECT_ROOT}/app.py" ]]; then
+    log_error "app.py not found in ${PROJECT_ROOT}."
     log_info  "Please run this script from inside the project directory."
     exit 1
 fi
@@ -430,7 +431,7 @@ log_ok "All critical imports verified."
 # =============================================================================
 log_step "Checking downloads directory"
 
-DOWNLOADS_DIR="${SCRIPT_DIR}/downloads"
+DOWNLOADS_DIR="${PROJECT_ROOT}/downloads"
 if [[ ! -d "$DOWNLOADS_DIR" ]]; then
     mkdir -p "$DOWNLOADS_DIR"
     log_ok "Created downloads/ directory."
@@ -462,7 +463,7 @@ echo -e "   Press ${C_BOLD}Ctrl + C${C_RESET} to stop the server.\n"
     fi
 }) &>/dev/null &
 
-cd "$SCRIPT_DIR"
+cd "$PROJECT_ROOT"
 
 exec streamlit run app.py \
     "--server.port=${STREAMLIT_PORT}" \

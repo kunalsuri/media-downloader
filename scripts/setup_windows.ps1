@@ -145,12 +145,13 @@ $StreamlitPort   = if ($env:STREAMLIT_PORT)   { $env:STREAMLIT_PORT   } else { "
 $SkipPkgManager  = if ($env:SKIP_PKG_MANAGER) { $env:SKIP_PKG_MANAGER } else { "0" }
 $RecreateVenv    = if ($env:RECREATE_VENV)    { $env:RECREATE_VENV    } else { "0" }
 
-# Resolve the project directory to the folder containing this script.
+# Resolve the project directory (this script lives in scripts/; parent = project root).
 $ScriptDir    = $PSScriptRoot
-$VenvDir      = Join-Path $ScriptDir ".venv"
-$Requirements = Join-Path $ScriptDir "requirements.txt"
+$ProjectRoot  = Split-Path $ScriptDir -Parent
+$VenvDir      = Join-Path $ProjectRoot ".venv"
+$Requirements = Join-Path $ProjectRoot "requirements.txt"
 
-Write-Info "Project root  : $ScriptDir"
+Write-Info "Project root  : $ProjectRoot"
 Write-Info "Virtual env   : $VenvDir"
 Write-Info "Streamlit port: $StreamlitPort"
 
@@ -160,8 +161,8 @@ Write-Info "Streamlit port: $StreamlitPort"
 
 Write-Step "Validating project files"
 
-if (-not (Test-Path (Join-Path $ScriptDir "app.py"))) {
-    Write-Err "app.py not found in $ScriptDir"
+if (-not (Test-Path (Join-Path $ProjectRoot "app.py"))) {
+    Write-Err "app.py not found in $ProjectRoot"
     Write-Info "Please run this script from inside the project directory."
     exit 1
 }
@@ -445,7 +446,7 @@ Write-Ok "All critical imports verified."
 
 Write-Step "Checking downloads directory"
 
-$DownloadsDir = Join-Path $ScriptDir "downloads"
+$DownloadsDir = Join-Path $ProjectRoot "downloads"
 if (-not (Test-Path $DownloadsDir)) {
     New-Item -ItemType Directory -Path $DownloadsDir | Out-Null
     Write-Ok "Created downloads\ directory."
@@ -466,7 +467,7 @@ Write-Host "   Press Ctrl + C to stop the server." -ForegroundColor White
 Write-Host ""
 
 # Change to the project root so relative paths in app.py resolve correctly.
-Set-Location $ScriptDir
+Set-Location $ProjectRoot
 
 # Open the browser after a short delay to let Streamlit start up.
 $BrowserJob = Start-Job -ScriptBlock {

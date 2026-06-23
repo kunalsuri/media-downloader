@@ -18,7 +18,12 @@
 # =============================================================================
 set -euo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
+
+# ── Suppress pip "new version" notices and force UTF-8 Python I/O ─────────────
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+export PYTHONUTF8=1
+export PYTHONIOENCODING=utf-8
 
 # ── Validate required project files ─────────────────────────────────────────
 if [ ! -f "app.py" ]; then
@@ -90,12 +95,13 @@ echo
 echo " [3/4] Installing / verifying packages..."
 
 if [ "$FIRST_RUN" -eq 1 ]; then
-    python3 -m pip install --quiet --upgrade pip
+    python3 -m pip install --quiet --upgrade pip --disable-pip-version-check
     echo " [SETUP] Installing packages from requirements.txt ..."
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt --disable-pip-version-check
     echo " [OK]   All packages installed."
 else
-    pip install --quiet --no-cache-dir -r requirements.txt
+    python3 -m pip install --quiet --upgrade pip --disable-pip-version-check
+    pip install --quiet --no-cache-dir -r requirements.txt --disable-pip-version-check
     echo " [OK]   Packages verified."
 fi
 
@@ -129,11 +135,21 @@ echo " |  Press Ctrl+C to stop the server."
 echo " +----------------------------------------------------------+"
 echo
 
+# Temporarily turn off exit-on-error so we can handle Streamlit stop behavior gracefully
+set +e
 streamlit run app.py \
     "--server.port=${STREAMLIT_PORT}" \
     "--server.headless=false" \
     "--browser.gatherUsageStats=false"
+STREAMLIT_EXIT=$?
+set -e
 
 echo
+if [ "$STREAMLIT_EXIT" -ne 0 ] && [ "$STREAMLIT_EXIT" -ne 130 ]; then
+    echo " [WARN]  Streamlit stopped with an error (exit code ${STREAMLIT_EXIT})."
+    echo "         Scroll up to see the error details."
+    echo
+fi
+
 echo " Server stopped. Press Enter to close."
 read -r

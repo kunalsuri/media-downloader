@@ -2,6 +2,17 @@
 setlocal EnableDelayedExpansion
 title Media Downloader — Setup ^& Launch
 
+REM ── UTF-8 console + Python UTF-8 mode ────────────────────────────────────────
+REM    chcp 65001  : switches cmd.exe to UTF-8 so Python's print() never throws
+REM                  UnicodeEncodeError on special characters.
+REM    PYTHONUTF8  : forces Python I/O layer to use UTF-8 regardless of locale.
+REM    PIP_DISABLE_PIP_VERSION_CHECK : suppresses pip's "[notice] new pip/package
+REM                  available" messages that appear even with --quiet in pip 23+.
+chcp 65001 > nul 2>&1
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
+set PIP_DISABLE_PIP_VERSION_CHECK=1
+
 REM =============================================================================
 REM  launch.bat  —  Media Downloader  |  Windows double-click launcher
 REM
@@ -24,8 +35,8 @@ REM    STREAMLIT_PORT  — Port for the server  (default: 8501)
 REM    RECREATE_VENV   — Set to 1 to delete and rebuild .venv
 REM =============================================================================
 
-REM ── Always run from the folder containing this .bat file ─────────────────────
-cd /d "%~dp0"
+REM ── Always run from the project root (parent of the scripts\ folder) ──────────
+cd /d "%~dp0.."
 
 REM ── Validate required project files are present ──────────────────────────────
 if not exist "app.py" (
@@ -138,26 +149,30 @@ echo  [3/4] Installing / verifying packages...
 if "!FIRST_RUN!"=="1" (
     REM First run: full verbose output so the user can see download progress
     echo  [SETUP] Upgrading pip...
-    python -m pip install --quiet --upgrade pip
+    python -m pip install --quiet --upgrade pip --disable-pip-version-check
     echo.
     echo  [SETUP] Installing packages from requirements.txt
-    echo          (this may take 1-2 minutes on first run)
+    echo          This may take 1-2 minutes on first run.
     echo.
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt --disable-pip-version-check
     if !errorlevel! neq 0 (
         echo.
         echo  [ERROR] Package installation failed.
         echo          Check your internet connection and try again.
+        echo          To retry from scratch: set RECREATE_VENV=1 and run again.
         goto :error
     )
     echo.
     echo  [OK]    All packages installed successfully.
 ) else (
-    REM Subsequent runs: quiet sync — only shows output if something changed
-    pip install --quiet --no-cache-dir -r requirements.txt
+    REM Subsequent runs: upgrade pip silently, then verify packages
+    python -m pip install --quiet --upgrade pip --disable-pip-version-check
+    pip install --quiet --no-cache-dir -r requirements.txt --disable-pip-version-check
     if !errorlevel! neq 0 (
         echo  [ERROR] Package verification failed.
-        echo          Try: set RECREATE_VENV=1 and run launch.bat again.
+        echo          To repair your environment, run:
+        echo              set RECREATE_VENV=1
+        echo              1Click-media-downloader.bat
         goto :error
     )
     echo  [OK]    Packages verified.
@@ -177,7 +192,7 @@ python -m downloader.updater
 if %errorlevel% neq 0 (
     REM A non-zero exit only means the pip install failed, not that the check
     REM failed.  Network errors exit 0.  We warn but do not abort the launch.
-    echo  [WARN]  yt-dlp update attempt returned an error (see above).
+    echo  [WARN]  yt-dlp update attempt returned an error - see details above.
     echo          The app will start with the currently installed version.
 )
 
@@ -202,14 +217,27 @@ echo  ^|  Press Ctrl+C here to stop the server.
 echo  +----------------------------------------------------------+
 echo.
 
-streamlit run app.py ^
+call streamlit run app.py ^
     "--server.port=!STREAMLIT_PORT!" ^
     "--server.headless=false" ^
     "--browser.gatherUsageStats=false"
 
 REM ── Server stopped (user pressed Ctrl+C or an error occurred) ────────────────
+set STREAMLIT_EXIT=!errorlevel!
 echo.
-echo  Server stopped.
+if !STREAMLIT_EXIT! neq 0 (
+    echo  [WARN]  Streamlit stopped with an error - exit code: !STREAMLIT_EXIT!
+    echo          Scroll up to see the error details.
+    echo.
+    echo  Common fixes:
+    echo    - Port in use      :  set STREAMLIT_PORT=8502  and run again
+    echo    - Broken packages  :  set RECREATE_VENV=1  and run again to rebuild
+    echo    - Corrupted env    :  set RECREATE_VENV=1  and run again
+    echo.
+    pause
+    exit /b !STREAMLIT_EXIT!
+)
+echo  Server stopped normally.
 goto :done
 
 REM =============================================================================
