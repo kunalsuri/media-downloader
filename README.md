@@ -19,9 +19,6 @@
 
 ---
 
-<details>
-<summary><b>✨ Click to Expand: Features</b></summary>
-
 ## ✨ Features
 
 | Feature | Details |
@@ -37,12 +34,9 @@
 | 🛡️ **Security Hardened** | XSS sanitisation on metadata, strict socket timeouts, and a 2 GiB file safety cap |
 | ⚙️ **Automatic Updates** | Automatically checks for and updates `yt-dlp` to the latest PyPI version at every startup |
 
-</details>
+<br>
 
 ---
-
-<details>
-<summary><b>🚀 Click to Expand: Quick Start (OS Launchers & Manual Setup)</b></summary>
 
 ## 🚀 Quick Start
 
@@ -53,7 +47,12 @@ git clone https://github.com/kunalsuri/media-downloader.git
 cd media-downloader
 ```
 
-Then, run the launcher script designed for your operating system:
+Then, run the launcher script designed for your operating system (see below :point_down:):
+
+<br>
+
+<details>
+<summary><b>🚀 Click to Expand: Quick Start (OS Launchers & Manual Setup)</b></summary>
 
 ### 🪟 Windows (10 / 11)
 
@@ -148,12 +147,49 @@ streamlit run app.py
 
 </details>
 
+<br>
+
 ---
 
-<details>
-<summary><b>🏗️ Click to Expand: Architecture & System Flow</b></summary>
+<br>
 
-## 🏗️ System Flow & Architecture
+ 
+<details>
+<summary><b>🗂️ Click to Expand: All Technical Detail</b></summary>
+
+---
+
+### 🗂️ Project Structure
+
+```
+media-downloader/
+├── app.py                  # Streamlit frontend (sidebar, UI panels, downloads)
+├── CLAUDE.md               # Developer guidelines & development workflow
+├── requirements.txt        # Runtime python dependencies
+├── requirements-dev.txt    # Testing & development dependencies
+├── pytest.ini              # Pytest configuration
+├── assets/                 # Repository visual assets (banners, logos)
+├── downloader/             # Core downloader library
+│   ├── __init__.py         # Shared module interface
+│   ├── youtube.py          # YoutubeDownloader implementation
+│   ├── instagram.py        # InstagramDownloader (inherits youtube)
+│   ├── updater.py          # Version verification & yt-dlp auto-updates
+│   └── utils.py            # Platform detection, filename sanitisation, formatting
+├── scripts/                # Launchers, installers, and test tools
+│   ├── 1Click-media-downloader.bat
+│   ├── launch.ps1
+│   ├── launch.sh
+│   ├── setup_windows.ps1
+│   ├── setup_macos.sh
+│   ├── setup_linux.sh
+│   ├── run_tests.bat
+│   └── run_tests.sh
+└── tests/                  # Pytest test suite (offline & integration tests)
+```
+
+---
+
+### 🏗️ System Flow & Architecture
 
 The diagram below shows the workflow of the application from user input to final file download:
 
@@ -187,56 +223,15 @@ graph TD
     StreamlitUI -->|Offers file save| User
 ```
 
-</details>
-
 ---
 
-<details>
-<summary><b>🗂️ Click to Expand: Project Structure</b></summary>
-
-## 🗂️ Project Structure
-
-```
-media-downloader/
-├── app.py                  # Streamlit frontend (sidebar, UI panels, downloads)
-├── CLAUDE.md               # Developer guidelines & development workflow
-├── requirements.txt        # Runtime python dependencies
-├── requirements-dev.txt    # Testing & development dependencies
-├── pytest.ini              # Pytest configuration
-├── assets/                 # Repository visual assets (banners, logos)
-├── downloader/             # Core downloader library
-│   ├── __init__.py         # Shared module interface
-│   ├── youtube.py          # YoutubeDownloader implementation
-│   ├── instagram.py        # InstagramDownloader (inherits youtube)
-│   ├── updater.py          # Version verification & yt-dlp auto-updates
-│   └── utils.py            # Platform detection, filename sanitisation, formatting
-├── scripts/                # Launchers, installers, and test tools
-│   ├── 1Click-media-downloader.bat
-│   ├── launch.ps1
-│   ├── launch.sh
-│   ├── setup_windows.ps1
-│   ├── setup_macos.sh
-│   ├── setup_linux.sh
-│   ├── run_tests.bat
-│   └── run_tests.sh
-└── tests/                  # Pytest test suite (offline & integration tests)
-```
-
-</details>
-
-
----
-
-<details>
-<summary><b>🧪 Click to Expand: Running Tests</b></summary>
-
-## 🧪 Running Tests
+### 🧪 Running Tests
 
 A comprehensive unit test suite is available under the `tests/` directory to verify URL parsing, platform detection, file naming rules, and updater behaviors.
 
 To run tests on your platform:
 
-### 🪟 Windows (Batch)
+#### 🪟 Windows (Batch)
 * Double-click **`scripts\run_tests.bat`** (runs offline tests).
 * Run via terminal for arguments:
   ```cmd
@@ -244,7 +239,7 @@ To run tests on your platform:
   .\scripts\run_tests.bat --cov       :: Runs tests and generates a test coverage report
   ```
 
-### 🍎/🐧 macOS & Linux (Shell)
+#### 🍎/🐧 macOS & Linux (Shell)
 * Run the test runner script:
   ```bash
   chmod +x scripts/run_tests.sh
@@ -255,10 +250,9 @@ To run tests on your platform:
 
 </details>
 
----
+<br>
 
-<details>
-<summary><b>🔒 Click to Expand: Security & Safety Controls</b></summary>
+---
 
 ## 🔒 Security & Safety Controls
 
@@ -266,8 +260,6 @@ To run tests on your platform:
 * **Size Enforcement**: Downloader halts and errors if metadata reports files exceeding **2 GiB** to prevent disk storage exhaustion attacks.
 * **XSS Defences**: All video metadata properties (titles, author descriptions, views) are HTML-escaped before display in Streamlit panels.
 * **Execution Isolation**: All virtual environments are separate from the system path; updater scripts run package installations internally with `--quiet` flags.
-
-</details>
 
 ---
 
