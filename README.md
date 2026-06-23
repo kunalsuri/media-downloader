@@ -19,6 +19,9 @@
 
 ---
 
+<details>
+<summary><b>✨ Click to Expand: Features</b></summary>
+
 ## ✨ Features
 
 | Feature | Details |
@@ -34,43 +37,12 @@
 | 🛡️ **Security Hardened** | XSS sanitisation on metadata, strict socket timeouts, and a 2 GiB file safety cap |
 | ⚙️ **Automatic Updates** | Automatically checks for and updates `yt-dlp` to the latest PyPI version at every startup |
 
----
-
-## 🏗️ System Flow & Architecture
-
-The diagram below shows the workflow of the application from user input to final file download:
-
-```mermaid
-graph TD
-    %% Define Styles
-    classDef ui fill:#0e1117,stroke:#ff4b4b,stroke-width:2px,color:#fff;
-    classDef core fill:#0b192c,stroke:#00d2c4,stroke-width:2px,color:#fff;
-    classDef ext fill:#1e1e2f,stroke:#8a2be2,stroke-width:2px,color:#fff;
-    
-    %% Diagram nodes
-    User([User])
-    StreamlitUI["Streamlit UI <br> (app.py)"]:::ui
-    UrlValidator["URL Validator <br> (downloader.utils)"]:::core
-    DownloaderOrch["Downloader Orchestrator <br> (downloader.youtube/instagram)"]:::core
-    YtdlpSubprocess["yt-dlp <br> (Subprocess)"]:::ext
-    FFmpeg["FFmpeg <br> (Merge & Convert)"]:::ext
-    PyPI["PyPI Registry"]:::ext
-    LocalDisk[("Local Folder <br> (downloads/)")]:::core
-    
-    %% Interactions
-    User -->|Enters URL & selects quality| StreamlitUI
-    StreamlitUI -->|Validates pattern| UrlValidator
-    StreamlitUI -->|Queries updates & latest release| PyPI
-    StreamlitUI -->|Triggers download| DownloaderOrch
-    DownloaderOrch -->|Spawns with hooks| YtdlpSubprocess
-    YtdlpSubprocess -->|Downloads streams| LocalDisk
-    YtdlpSubprocess -->|Combines video & audio| FFmpeg
-    FFmpeg -->|Saves final MP4/MP3| LocalDisk
-    DownloaderOrch -->|Sends status events| StreamlitUI
-    StreamlitUI -->|Offers file save| User
-```
+</details>
 
 ---
+
+<details>
+<summary><b>🚀 Click to Expand: Quick Start (OS Launchers & Manual Setup)</b></summary>
 
 ## 🚀 Quick Start
 
@@ -174,32 +146,53 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
----
-
-## 🧪 Running Tests
-
-A comprehensive unit test suite is available under the `tests/` directory to verify URL parsing, platform detection, file naming rules, and updater behaviors.
-
-To run tests on your platform:
-
-### 🪟 Windows (Batch)
-* Double-click **`scripts\run_tests.bat`** (runs offline tests).
-* Run via terminal for arguments:
-  ```cmd
-  .\scripts\run_tests.bat --network   :: Includes PyPI + YouTube live connectivity tests
-  .\scripts\run_tests.bat --cov       :: Runs tests and generates a test coverage report
-  ```
-
-### 🍎/🐧 macOS & Linux (Shell)
-* Run the test runner script:
-  ```bash
-  chmod +x scripts/run_tests.sh
-  ./scripts/run_tests.sh
-  ./scripts/run_tests.sh --network
-  ./scripts/run_tests.sh --cov
-  ```
+</details>
 
 ---
+
+<details>
+<summary><b>🏗️ Click to Expand: Architecture & System Flow</b></summary>
+
+## 🏗️ System Flow & Architecture
+
+The diagram below shows the workflow of the application from user input to final file download:
+
+```mermaid
+graph TD
+    %% Define Styles
+    classDef ui fill:#0e1117,stroke:#ff4b4b,stroke-width:2px,color:#fff;
+    classDef core fill:#0b192c,stroke:#00d2c4,stroke-width:2px,color:#fff;
+    classDef ext fill:#1e1e2f,stroke:#8a2be2,stroke-width:2px,color:#fff;
+    
+    %% Diagram nodes
+    User([User])
+    StreamlitUI["Streamlit UI <br> (app.py)"]:::ui
+    UrlValidator["URL Validator <br> (downloader.utils)"]:::core
+    DownloaderOrch["Downloader Orchestrator <br> (downloader.youtube/instagram)"]:::core
+    YtdlpSubprocess["yt-dlp <br> (Subprocess)"]:::ext
+    FFmpeg["FFmpeg <br> (Merge & Convert)"]:::ext
+    PyPI["PyPI Registry"]:::ext
+    LocalDisk[("Local Folder <br> (downloads/)")]:::core
+    
+    %% Interactions
+    User -->|Enters URL & selects quality| StreamlitUI
+    StreamlitUI -->|Validates pattern| UrlValidator
+    StreamlitUI -->|Queries updates & latest release| PyPI
+    StreamlitUI -->|Triggers download| DownloaderOrch
+    DownloaderOrch -->|Spawns with hooks| YtdlpSubprocess
+    YtdlpSubprocess -->|Downloads streams| LocalDisk
+    YtdlpSubprocess -->|Combines video & audio| FFmpeg
+    FFmpeg -->|Saves final MP4/MP3| LocalDisk
+    DownloaderOrch -->|Sends status events| StreamlitUI
+    StreamlitUI -->|Offers file save| User
+```
+
+</details>
+
+---
+
+<details>
+<summary><b>🗂️ Click to Expand: Project Structure</b></summary>
 
 ## 🗂️ Project Structure
 
@@ -229,7 +222,43 @@ media-downloader/
 └── tests/                  # Pytest test suite (offline & integration tests)
 ```
 
+</details>
+
+
 ---
+
+<details>
+<summary><b>🧪 Click to Expand: Running Tests</b></summary>
+
+## 🧪 Running Tests
+
+A comprehensive unit test suite is available under the `tests/` directory to verify URL parsing, platform detection, file naming rules, and updater behaviors.
+
+To run tests on your platform:
+
+### 🪟 Windows (Batch)
+* Double-click **`scripts\run_tests.bat`** (runs offline tests).
+* Run via terminal for arguments:
+  ```cmd
+  .\scripts\run_tests.bat --network   :: Includes PyPI + YouTube live connectivity tests
+  .\scripts\run_tests.bat --cov       :: Runs tests and generates a test coverage report
+  ```
+
+### 🍎/🐧 macOS & Linux (Shell)
+* Run the test runner script:
+  ```bash
+  chmod +x scripts/run_tests.sh
+  ./scripts/run_tests.sh
+  ./scripts/run_tests.sh --network
+  ./scripts/run_tests.sh --cov
+  ```
+
+</details>
+
+---
+
+<details>
+<summary><b>🔒 Click to Expand: Security & Safety Controls</b></summary>
 
 ## 🔒 Security & Safety Controls
 
@@ -237,6 +266,8 @@ media-downloader/
 * **Size Enforcement**: Downloader halts and errors if metadata reports files exceeding **2 GiB** to prevent disk storage exhaustion attacks.
 * **XSS Defences**: All video metadata properties (titles, author descriptions, views) are HTML-escaped before display in Streamlit panels.
 * **Execution Isolation**: All virtual environments are separate from the system path; updater scripts run package installations internally with `--quiet` flags.
+
+</details>
 
 ---
 
