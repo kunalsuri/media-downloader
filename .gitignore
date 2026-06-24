@@ -219,3 +219,4 @@ __marimo__/
 # Media Downloader – downloaded media files
 downloads/*
 !downloads/.gitkeep
+.claude/settings.local.json
