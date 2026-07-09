@@ -5,3 +5,8 @@ yt-dlp>=2026.6.9
 # HTTP + utilities (pulled in by yt-dlp, pinned for reproducibility)
 requests>=2.31.0
 certifi>=2024.2.2
+
+# HTML Parsing + Markdown Conversion
+beautifulsoup4>=4.12.0
+html2text>=2024.2.25
+

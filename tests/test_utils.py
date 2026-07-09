@@ -238,6 +238,14 @@ class TestBuildOutputPath:
         assert nested.exists()
         assert p.parent == nested
 
+    def test_empty_extension_no_trailing_dot(self, tmp_path: Path) -> None:
+        p1 = build_output_path(tmp_path, "My Dir", "")
+        assert p1.name == "My Dir"
+        p1.mkdir()
+        
+        p2 = build_output_path(tmp_path, "My Dir", "")
+        assert p2.name == "My Dir (2)"
+
 
 # ===========================================================================
 # format_filesize

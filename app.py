@@ -24,6 +24,7 @@ import streamlit as st
 from downloader import (
     InstagramDownloader,
     YoutubeDownloader,
+    MediumDownloader,
     validate_url,
 )
 from downloader.updater import get_version_info
@@ -142,6 +143,13 @@ html, body, [data-testid="stAppViewContainer"] {
     font-size: 0.78rem;
     padding: 0.3rem 0.85rem;
 }
+.badge-platform-medium {
+    background: rgba(0, 171, 108, 0.12);
+    color: #00ab6c;
+    border: 1px solid rgba(0, 171, 108, 0.32);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.85rem;
+}
 
 /* ── Hero ─────────────────────────────────────────────────────── */
 .hero {
@@ -249,6 +257,10 @@ html, body, [data-testid="stAppViewContainer"] {
 /* Instagram card uses a purple-pink accent instead */
 .video-card.instagram-card::before {
     background: linear-gradient(90deg, #833ab4, #e1306c, #fd1d1d, transparent);
+}
+/* Medium card uses a green accent instead */
+.video-card.medium-card::before {
+    background: linear-gradient(90deg, #00ab6c, #00ffaa, transparent);
 }
 .video-title {
     font-size: 1rem;
@@ -378,6 +390,11 @@ def _init_state() -> None:
         "download_filepath": None,
         "download_filename": None,
         "platform": None,       # "youtube" | "instagram" | None
+        "medium_info": None,
+        "medium_last_url": "",
+        "medium_download_result": None,
+        "medium_download_filepath": None,
+        "medium_download_filename": None,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -388,6 +405,8 @@ def _init_state() -> None:
         st.session_state.yt_downloader = YoutubeDownloader(output_dir=DOWNLOADS_DIR)
     if "ig_downloader" not in st.session_state:
         st.session_state.ig_downloader = InstagramDownloader(output_dir=DOWNLOADS_DIR)
+    if "medium_downloader" not in st.session_state:
+        st.session_state.medium_downloader = MediumDownloader(output_dir=DOWNLOADS_DIR)
 
 
 _init_state()
@@ -499,18 +518,18 @@ with st.sidebar:
 
     st.divider()
 
-    # ── System status ────────────────────────────────────────────────────
+    # ── System status ──────────────────────────────────────────────────────────
     st.markdown('<p class="section-label">System</p>', unsafe_allow_html=True)
     # Both downloaders share the same ffmpeg detection — use the YT instance
     ffmpeg_ok = st.session_state.yt_downloader.ffmpeg_available
     if ffmpeg_ok:
         st.markdown(
-            '<span class="badge badge-ok">✓&nbsp; ffmpeg ready</span>',
+            '<span class="badge badge-ok">✔&nbsp; ffmpeg ready</span>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            '<span class="badge badge-warn">⚠&nbsp; ffmpeg not found</span>',
+            '<span class="badge badge-warn">⚠️&nbsp; ffmpeg not found</span>',
             unsafe_allow_html=True,
         )
         st.caption(
@@ -520,254 +539,406 @@ with st.sidebar:
 
     st.divider()
 
-    # ── About ────────────────────────────────────────────────────────────
+    # ── About ──────────────────────────────────────────────────────────────────
     st.markdown('<p class="section-label">About</p>', unsafe_allow_html=True)
     st.caption(
         "Built with [Streamlit](https://streamlit.io) & "
         "[yt-dlp](https://github.com/yt-dlp/yt-dlp)."
     )
     st.caption(
-        "**Supported:** YouTube videos, Shorts, Music · "
-        "Instagram Reels, Posts, IGTV, Stories."
+        "**Supported:** YouTube videos/Shorts/Music, "
+        "Instagram Reels/Posts/IGTV/Stories, "
+        "Medium articles."
     )
     st.caption("⚖️ Personal use only — respect copyright laws.")
     st.caption("Max download size: **2 GiB**.")
 
-# ===========================================================================
-# MAIN AREA
-# ===========================================================================
+# Create Tabs
+tab_media, tab_medium = st.tabs(["🎥 Media Downloader", "✍️ Medium Downloader"])
 
-# ── Hero ─────────────────────────────────────────────────────────────────
-st.markdown(
-    """
-    <div class="hero">
-        <h1>⬇️ Media Downloader</h1>
-        <p>Paste a YouTube or Instagram URL, pick your format, then download.</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ── URL input ─────────────────────────────────────────────────────────────
-url_input = st.text_input(
-    label="Media URL",
-    placeholder="YouTube or Instagram URL — Reel, Post, IGTV, video, Short…",
-    help=(
-        "YouTube: youtube.com/watch?v=…, youtu.be/…, Shorts, Music\n"
-        "Instagram: /reel/, /p/, /tv/, /stories/ — public content only"
-    ),
-    label_visibility="collapsed",
-    key="url_input",
-)
-
-# ── Platform detection (fresh, from the current input value) ──────────────
-platform = detect_platform(url_input.strip()) if url_input.strip() else None
-
-# ── Reset state when URL changes ──────────────────────────────────────────
-if url_input != st.session_state.last_url and st.session_state.video_info is not None:
-    st.session_state.video_info = None
-    st.session_state.download_result = None
-    st.session_state.download_filepath = None
-    st.session_state.download_filename = None
-    st.session_state.platform = None
-
-# ── Active downloader — selected by detected platform ─────────────────────
-active_downloader = (
-    st.session_state.ig_downloader
-    if platform == "instagram"
-    else st.session_state.yt_downloader
-)
-
-# ── Action buttons ────────────────────────────────────────────────────────
-col_fetch, col_dl = st.columns(2)
-with col_fetch:
-    fetch_clicked = st.button(
-        "🔍  Fetch Info",
-        use_container_width=True,
-        key="btn_fetch",
+with tab_media:
+    # ── Hero ─────────────────────────────────────────────────────────────────
+    st.markdown(
+        """
+        <div class="hero">
+            <h1>⬇️ Media Downloader</h1>
+            <p>Paste a YouTube or Instagram URL, pick your format, then download.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-with col_dl:
-    download_clicked = st.button(
-        "⬇️  Download",
-        type="primary",
-        use_container_width=True,
-        disabled=(
-            st.session_state.video_info is None
-            or url_input != st.session_state.last_url
+
+    # ── URL input ─────────────────────────────────────────────────────────────
+    url_input = st.text_input(
+        label="Media URL",
+        placeholder="YouTube or Instagram URL — Reel, Post, IGTV, video, Short…",
+        help=(
+            "YouTube: youtube.com/watch?v=…, youtu.be/…, Shorts, Music\n"
+            "Instagram: /reel/, /p/, /tv/, /stories/ — public content only"
         ),
-        key="btn_download",
+        label_visibility="collapsed",
+        key="url_input",
     )
 
-# ── Fetch media info ──────────────────────────────────────────────────────
-if fetch_clicked:
-    is_valid, error_msg = validate_url(url_input)
-    if not is_valid:
-        st.error(f"🚫 {error_msg}")
+    # ── Platform detection (fresh, from the current input value) ──────────────
+    platform = detect_platform(url_input.strip()) if url_input.strip() else None
+
+    # ── Reset state when URL changes ──────────────────────────────────────────
+    if url_input != st.session_state.last_url and st.session_state.video_info is not None:
         st.session_state.video_info = None
-    else:
-        platform_label = (
-            "Instagram content" if platform == "instagram" else "video"
-        )
-        with st.spinner(f"Fetching {platform_label} information…"):
-            try:
-                info = active_downloader.get_info(url_input)
-                st.session_state.video_info = info
-                st.session_state.last_url = url_input
-                st.session_state.platform = platform
-                st.session_state.download_result = None
-                st.session_state.download_filepath = None
-                st.session_state.download_filename = None
-            except ValueError as exc:
-                st.error(f"🚫 {exc}")
-                st.session_state.video_info = None
+        st.session_state.download_result = None
+        st.session_state.download_filepath = None
+        st.session_state.download_filename = None
+        st.session_state.platform = None
 
-# ── Media info card ───────────────────────────────────────────────────────
-if st.session_state.video_info is not None:
-    info = st.session_state.video_info
-    card_platform = st.session_state.platform
-
-    # Choose card style: Instagram uses a purple accent line
-    card_class = (
-        "video-card instagram-card"
-        if card_platform == "instagram"
-        else "video-card"
+    # ── Active downloader — selected by detected platform ─────────────────────
+    active_downloader = (
+        st.session_state.ig_downloader
+        if platform == "instagram"
+        else st.session_state.yt_downloader
     )
-    st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
 
-    # Platform badge + thumbnail
-    thumb_col, meta_col = st.columns([1, 2])
-    with thumb_col:
-        if info.thumbnail_url:
-            st.image(info.thumbnail_url, use_container_width=True)
-        # Platform badge under the thumbnail
-        if card_platform == "youtube":
-            st.markdown(
-                '<span class="badge badge-platform-yt" style="margin-top:0.5rem">'
-                "▶&nbsp; YouTube</span>",
-                unsafe_allow_html=True,
-            )
-        elif card_platform == "instagram":
-            st.markdown(
-                '<span class="badge badge-platform-ig" style="margin-top:0.5rem">'
-                "📷&nbsp; Instagram</span>",
-                unsafe_allow_html=True,
-            )
-
-    with meta_col:
-        # Title — escaped to prevent HTML injection
-        st.markdown(
-            f'<p class="video-title">{html.escape(info.title)}</p>',
-            unsafe_allow_html=True,
-        )
-
-        # Stats row
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Duration", info.duration_str)
-        # Instagram shows Likes for image posts; Views for video posts
-        stats_label = (
-            "Views/Likes" if card_platform == "instagram" else "Views"
-        )
-        c2.metric(stats_label, _fmt_views(info.view_count))
-        uploader_display = info.uploader
-        if len(uploader_display) > 20:
-            uploader_display = uploader_display[:19] + "…"
-        c3.metric("Channel" if card_platform == "youtube" else "Creator", uploader_display)
-
-        if info.description:
-            with st.expander("📄 Description / Caption"):
-                st.write(
-                    info.description[:800]
-                    + ("…" if len(info.description) > 800 else "")
-                )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ── Instagram-specific hint ───────────────────────────────────────────
-    if card_platform == "instagram":
-        st.info(
-            "ℹ️ **Instagram note:** Only public posts can be downloaded. "
-            "Image-only posts have no video to extract.",
-            icon=None,
-        )
-
-# ── Download ──────────────────────────────────────────────────────────────
-if download_clicked and st.session_state.video_info is not None:
-    mode = "mp3" if is_mp3 else "mp4"
-    fmt_label = "MP3 · 192 kbps" if is_mp3 else f"MP4 · {quality}"
-
-    with st.status(f"⬇️  Downloading as {fmt_label}…", expanded=True) as dl_status:
-
-        progress_bar = st.progress(0, text="Connecting…")
-
-        def _progress_hook(d: dict) -> None:
-            """Feed yt-dlp progress data into the Streamlit progress bar."""
-            if d.get("status") == "downloading":
-                downloaded = d.get("downloaded_bytes") or 0
-                total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-                speed = d.get("speed")
-                eta = d.get("eta")
-
-                pct = min(int((downloaded / total) * 100) if total > 0 else 0, 99)
-                speed_str = (format_filesize(int(speed)) + "/s") if speed else "…"
-                eta_str = f"{eta}s" if eta is not None else "…"
-
-                progress_bar.progress(
-                    pct,
-                    text=f"{pct}%  ·  {speed_str}  ·  ETA {eta_str}",
-                )
-            elif d.get("status") == "finished":
-                progress_bar.progress(99, text="Post-processing…")
-
-        result = active_downloader.download(
-            url=url_input,
-            mode=mode,
-            quality=quality,
-            progress_callback=_progress_hook,
-        )
-
-        if result.success and result.file_path and result.file_path.exists():
-            progress_bar.progress(100, text="Done!")
-            dl_status.update(
-                label=(
-                    f"✅  Ready — {result.file_path.name}"
-                    f"  ({format_filesize(result.file_size_bytes)})"
-                ),
-                state="complete",
-                expanded=False,
-            )
-            st.session_state.download_result = result
-            st.session_state.download_filepath = result.file_path
-            st.session_state.download_filename = result.file_path.name
-        else:
-            dl_status.update(label="❌  Download failed", state="error")
-            st.error(f"🚫 {result.error_message}")
-            st.session_state.download_result = None
-
-# ── Save-to-disk button (persists across reruns) ──────────────────────────
-if (
-    st.session_state.download_filepath is not None
-    and st.session_state.download_filename is not None
-    and st.session_state.download_filepath.exists()
-):
-    st.divider()
-    file_ext = Path(st.session_state.download_filename).suffix.lower()
-    mime = "audio/mpeg" if file_ext == ".mp3" else "video/mp4"
-
-    with open(st.session_state.download_filepath, "rb") as fh:
-        st.download_button(
-            label=f"💾  Save  {st.session_state.download_filename}",
-            data=fh,
-            file_name=st.session_state.download_filename,
-            mime=mime,
+    # ── Action buttons ────────────────────────────────────────────────────────
+    col_fetch, col_dl = st.columns(2)
+    with col_fetch:
+        fetch_clicked = st.button(
+            "🔍  Fetch Info",
             use_container_width=True,
+            key="btn_fetch",
+        )
+    with col_dl:
+        download_clicked = st.button(
+            "⬇️  Download",
+            type="primary",
+            use_container_width=True,
+            disabled=(
+                st.session_state.video_info is None
+                or url_input != st.session_state.last_url
+            ),
+            key="btn_download",
         )
 
+    # ── Fetch media info ──────────────────────────────────────────────────────
+    if fetch_clicked:
+        is_valid, error_msg = validate_url(url_input)
+        if not is_valid:
+            st.error(f"🚫 {error_msg}")
+            st.session_state.video_info = None
+        else:
+            platform_label = (
+                "Instagram content" if platform == "instagram" else "video"
+            )
+            with st.spinner(f"Fetching {platform_label} information…"):
+                try:
+                    info = active_downloader.get_info(url_input)
+                    st.session_state.video_info = info
+                    st.session_state.last_url = url_input
+                    st.session_state.platform = platform
+                    st.session_state.download_result = None
+                    st.session_state.download_filepath = None
+                    st.session_state.download_filename = None
+                except ValueError as exc:
+                    st.error(f"🚫 {exc}")
+                    st.session_state.video_info = None
+
+    # ── Media info card ───────────────────────────────────────────────────────
+    if st.session_state.video_info is not None:
+        info = st.session_state.video_info
+        card_platform = st.session_state.platform
+
+        # Choose card style: Instagram uses a purple accent line
+        card_class = (
+            "video-card instagram-card"
+            if card_platform == "instagram"
+            else "video-card"
+        )
+        st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
+
+        # Platform badge + thumbnail
+        thumb_col, meta_col = st.columns([1, 2])
+        with thumb_col:
+            if info.thumbnail_url:
+                st.image(info.thumbnail_url, use_container_width=True)
+            # Platform badge under the thumbnail
+            if card_platform == "youtube":
+                st.markdown(
+                    '<span class="badge badge-platform-yt" style="margin-top:0.5rem">'
+                    "▶&nbsp; YouTube</span>",
+                    unsafe_allow_html=True,
+                )
+            elif card_platform == "instagram":
+                st.markdown(
+                    '<span class="badge badge-platform-ig" style="margin-top:0.5rem">'
+                    "📷&nbsp; Instagram</span>",
+                    unsafe_allow_html=True,
+                )
+
+        with meta_col:
+            # Title — escaped to prevent HTML injection
+            st.markdown(
+                f'<p class="video-title">{html.escape(info.title)}</p>',
+                unsafe_allow_html=True,
+            )
+
+            # Stats row
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Duration", info.duration_str)
+            # Instagram shows Likes for image posts; Views for video posts
+            stats_label = (
+                "Views/Likes" if card_platform == "instagram" else "Views"
+            )
+            c2.metric(stats_label, _fmt_views(info.view_count))
+            uploader_display = info.uploader
+            if len(uploader_display) > 20:
+                uploader_display = uploader_display[:19] + "…"
+            c3.metric("Channel" if card_platform == "youtube" else "Creator", uploader_display)
+
+            if info.description:
+                with st.expander("📄 Description / Caption"):
+                    st.write(
+                        info.description[:800]
+                        + ("…" if len(info.description) > 800 else "")
+                    )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Instagram-specific hint ───────────────────────────────────────────
+        if card_platform == "instagram":
+            st.info(
+                "ℹ️ **Instagram note:** Only public posts can be downloaded. "
+                "Image-only posts have no video to extract.",
+                icon=None,
+            )
+
+    # ── Download ──────────────────────────────────────────────────────────────
+    if download_clicked and st.session_state.video_info is not None:
+        mode = "mp3" if is_mp3 else "mp4"
+        fmt_label = "MP3 · 192 kbps" if is_mp3 else f"MP4 · {quality}"
+
+        with st.status(f"⬇️  Downloading as {fmt_label}…", expanded=True) as dl_status:
+
+            progress_bar = st.progress(0, text="Connecting…")
+
+            def _progress_hook(d: dict) -> None:
+                """Feed yt-dlp progress data into the Streamlit progress bar."""
+                if d.get("status") == "downloading":
+                    downloaded = d.get("downloaded_bytes") or 0
+                    total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+                    speed = d.get("speed")
+                    eta = d.get("eta")
+
+                    pct = min(int((downloaded / total) * 100) if total > 0 else 0, 99)
+                    speed_str = (format_filesize(int(speed)) + "/s") if speed else "…"
+                    eta_str = f"{eta}s" if eta is not None else "…"
+
+                    progress_bar.progress(
+                        pct,
+                        text=f"{pct}%  ·  {speed_str}  ·  ETA {eta_str}",
+                    )
+                elif d.get("status") == "finished":
+                    progress_bar.progress(99, text="Post-processing…")
+
+            result = active_downloader.download(
+                url=url_input,
+                mode=mode,
+                quality=quality,
+                progress_callback=_progress_hook,
+            )
+
+            if result.success and result.file_path and result.file_path.exists():
+                progress_bar.progress(100, text="Done!")
+                dl_status.update(
+                    label=(
+                        f"✅  Ready — {result.file_path.name}"
+                        f"  ({format_filesize(result.file_size_bytes)})"
+                    ),
+                    state="complete",
+                    expanded=False,
+                )
+                st.session_state.download_result = result
+                st.session_state.download_filepath = result.file_path
+                st.session_state.download_filename = result.file_path.name
+            else:
+                dl_status.update(label="❌  Download failed", state="error")
+                st.error(f"🚫 {result.error_message}")
+                st.session_state.download_result = None
+
+    # ── Save-to-disk button (persists across reruns) ──────────────────────────
+    if (
+        st.session_state.download_filepath is not None
+        and st.session_state.download_filename is not None
+        and st.session_state.download_filepath.exists()
+    ):
+        st.divider()
+        file_ext = Path(st.session_state.download_filename).suffix.lower()
+        mime = "audio/mpeg" if file_ext == ".mp3" else "video/mp4"
+
+        with open(st.session_state.download_filepath, "rb") as fh:
+            st.download_button(
+                label=f"💾  Save  {st.session_state.download_filename}",
+                data=fh,
+                file_name=st.session_state.download_filename,
+                mime=mime,
+                use_container_width=True,
+            )
+
+with tab_medium:
+    # ── Hero ─────────────────────────────────────────────────────────────────
+    st.markdown(
+        """
+        <div class="hero">
+            <h1>📝 Medium Article Downloader</h1>
+            <p>Paste a Medium article URL, fetch details, and download as clean Markdown.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── URL input ─────────────────────────────────────────────────────────────
+    med_url_input = st.text_input(
+        label="Medium Article URL",
+        placeholder="https://medium.com/@username/article-slug or medium.com/...",
+        help="Paste a Medium article URL to convert it to Markdown with local images.",
+        label_visibility="collapsed",
+        key="med_url_input",
+    )
+
+    # ── Reset state when URL changes ──────────────────────────────────────────
+    if med_url_input != st.session_state.medium_last_url and st.session_state.medium_info is not None:
+        st.session_state.medium_info = None
+        st.session_state.medium_download_result = None
+        st.session_state.medium_download_filepath = None
+        st.session_state.medium_download_filename = None
+
+    # ── Action buttons ────────────────────────────────────────────────────────
+    col_med_fetch, col_med_dl = st.columns(2)
+    with col_med_fetch:
+        med_fetch_clicked = st.button(
+            "🔍  Fetch Info",
+            use_container_width=True,
+            key="btn_med_fetch",
+        )
+    with col_med_dl:
+        med_download_clicked = st.button(
+            "⬇️  Download",
+            type="primary",
+            use_container_width=True,
+            disabled=(
+                st.session_state.medium_info is None
+                or med_url_input != st.session_state.medium_last_url
+            ),
+            key="btn_med_download",
+        )
+
+    # ── Fetch article info ────────────────────────────────────────────────────
+    if med_fetch_clicked:
+        if not med_url_input.strip():
+            st.error("🚫 Please enter a Medium URL.")
+        elif "medium.com" not in med_url_input.strip() and "freedium.cfd" not in med_url_input.strip() and "medium.com" not in med_url_input.strip():
+            st.error("🚫 The URL does not appear to be a supported Medium link.")
+        else:
+            with st.spinner("Fetching article information…"):
+                try:
+                    info = st.session_state.medium_downloader.get_info(med_url_input)
+                    st.session_state.medium_info = info
+                    st.session_state.medium_last_url = med_url_input
+                    st.session_state.medium_download_result = None
+                    st.session_state.medium_download_filepath = None
+                    st.session_state.medium_download_filename = None
+                except ValueError as exc:
+                    st.error(f"🚫 {exc}")
+                    st.session_state.medium_info = None
+
+    # ── Article info card ─────────────────────────────────────────────────────
+    if st.session_state.medium_info is not None:
+        info = st.session_state.medium_info
+        st.markdown('<div class="video-card medium-card">', unsafe_allow_html=True)
+
+        thumb_col, meta_col = st.columns([1, 2])
+        with thumb_col:
+            if info.thumbnail_url:
+                st.image(info.thumbnail_url, use_container_width=True)
+            st.markdown(
+                '<span class="badge badge-platform-medium" style="margin-top:0.5rem">'
+                "📝&nbsp; Medium</span>",
+                unsafe_allow_html=True,
+            )
+
+        with meta_col:
+            st.markdown(
+                f'<p class="video-title">{html.escape(info.title)}</p>',
+                unsafe_allow_html=True,
+            )
+
+            c1, c2 = st.columns(2)
+            c1.metric("Author", info.uploader)
+            c2.metric("Format", "Markdown (.md)")
+
+            if info.description:
+                with st.expander("📄 Subtitle / Description"):
+                    st.write(info.description)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Download ──────────────────────────────────────────────────────────────
+    if med_download_clicked and st.session_state.medium_info is not None:
+        with st.status("⬇️  Downloading and converting article…", expanded=True) as dl_status:
+            progress_bar = st.progress(0, text="Connecting…")
+
+            def _med_progress_hook(d: dict) -> None:
+                if d.get("status") == "downloading":
+                    downloaded = d.get("downloaded_bytes") or 0
+                    total = d.get("total_bytes") or 1000
+                    pct = min(int((downloaded / total) * 100), 99)
+                    progress_bar.progress(pct, text=f"Downloading content & images: {pct}%")
+                elif d.get("status") == "finished":
+                    progress_bar.progress(99, text="Formatting Markdown…")
+
+            result = st.session_state.medium_downloader.download(
+                url=med_url_input,
+                progress_callback=_med_progress_hook,
+            )
+
+            if result.success and result.file_path and result.file_path.exists():
+                progress_bar.progress(100, text="Done!")
+                dl_status.update(
+                    label=(
+                        f"✅  Ready — {result.file_path.name}"
+                        f"  ({format_filesize(result.file_size_bytes)})"
+                    ),
+                    state="complete",
+                    expanded=False,
+                )
+                st.session_state.medium_download_result = result
+                st.session_state.medium_download_filepath = result.file_path
+                st.session_state.medium_download_filename = result.file_path.name
+            else:
+                dl_status.update(label="❌  Download failed", state="error")
+                st.error(f"🚫 {result.error_message}")
+                st.session_state.medium_download_result = None
+
+    # ── Save-to-disk button (persists across reruns) ──────────────────────────
+    if (
+        st.session_state.medium_download_filepath is not None
+        and st.session_state.medium_download_filename is not None
+        and st.session_state.medium_download_filepath.exists()
+    ):
+        st.divider()
+        with open(st.session_state.medium_download_filepath, "rb") as fh:
+            st.download_button(
+                label=f"💾  Save  {st.session_state.medium_download_filename}",
+                data=fh,
+                file_name=st.session_state.medium_download_filename,
+                mime="text/markdown",
+                use_container_width=True,
+                key="btn_med_save",
+            )
 # ── Footer ────────────────────────────────────────────────────────────────
 st.markdown(
     """
     <div class="footer">
         Built with ❤️ using <strong>Streamlit</strong> &amp; <strong>yt-dlp</strong>
-        &nbsp;·&nbsp; YouTube &amp; Instagram &nbsp;·&nbsp;
+        &nbsp;·&nbsp; YouTube, Instagram &amp; Medium &nbsp;·&nbsp;
         For personal use only — respect copyright laws.
     </div>
     """,

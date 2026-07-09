@@ -169,11 +169,11 @@ def build_output_path(directory: str | Path, title: str, extension: str) -> Path
 
     base = sanitize_filename(title)
     ext = extension.lstrip(".")
-    candidate = directory / f"{base}.{ext}"
+    candidate = directory / f"{base}.{ext}" if ext else directory / base
 
     counter = 2
     while candidate.exists():
-        candidate = directory / f"{base} ({counter}).{ext}"
+        candidate = directory / f"{base} ({counter}).{ext}" if ext else directory / f"{base} ({counter})"
         counter += 1
 
     return candidate

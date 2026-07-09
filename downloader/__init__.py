@@ -12,11 +12,13 @@ detect_platform     – identify "youtube" or "instagram" from a URL
 
 from .instagram import InstagramDownloader
 from .youtube import YoutubeDownloader
+from .medium import MediumDownloader
 from .utils import detect_platform, sanitize_filename, validate_url
 
 __all__ = [
     "YoutubeDownloader",
     "InstagramDownloader",
+    "MediumDownloader",
     "validate_url",
     "sanitize_filename",
     "detect_platform",
